@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { colors, spacing, radius, typography, shadow, colorForSubject } from '../theme';
+import { useTheme } from '../theme';
 import { relativeLabel, dueStatus } from '../utils/dates';
 
 // A single task row: checkbox, title, subject badge, due date pill.
@@ -8,9 +8,15 @@ import { relativeLabel, dueStatus } from '../utils/dates';
 // Once a task is done, a small delete button appears on the right as a
 // shortcut to clear it out without opening the edit sheet.
 export default function TaskCard({ task, onToggle, onPress, onDelete }) {
+  const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
   const subjectColor = colorForSubject(task.subject);
   const status = dueStatus(task.dueDate, task.done);
-  const duePill = dueStyleFor(status);
+  const duePill = dueStyleFor(status, colors);
 
   return (
     <Pressable
@@ -78,7 +84,7 @@ export default function TaskCard({ task, onToggle, onPress, onDelete }) {
   );
 }
 
-function dueStyleFor(status) {
+function dueStyleFor(status, colors) {
   switch (status) {
     case 'overdue':
       return { bg: colors.dangerSoft, fg: colors.danger };
@@ -93,96 +99,97 @@ function dueStyleFor(status) {
   }
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
-    alignItems: 'flex-start',
-  },
-  cardDone: {
-    backgroundColor: colors.cardMuted,
-  },
-  cardPressed: {
-    opacity: 0.7,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxDone: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  content: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  title: {
-    ...typography.body,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  titleDone: {
-    textDecorationLine: 'line-through',
-    color: colors.textMuted,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  subjectBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    maxWidth: 180,
-  },
-  subjectText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  duePill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  dueText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.dangerSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  deleteBtnPressed: {
-    opacity: 0.6,
-  },
-  deleteBtnText: {
-    color: colors.danger,
-    fontSize: 22,
-    fontWeight: '500',
-    lineHeight: 24,
-    // slight nudge so the × sits visually centered
-    marginTop: -2,
-  },
-});
+const makeStyles = ({ colors, spacing, radius, typography }) =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+      gap: spacing.md,
+      alignItems: 'flex-start',
+    },
+    cardDone: {
+      backgroundColor: colors.cardMuted,
+    },
+    cardPressed: {
+      opacity: 0.7,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: radius.sm,
+      borderWidth: 2,
+      borderColor: colors.borderStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+    },
+    checkboxDone: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
+    },
+    checkmark: {
+      color: '#fff',
+      fontSize: 15,
+      fontWeight: '700',
+      lineHeight: 16,
+    },
+    content: {
+      flex: 1,
+      gap: spacing.sm,
+    },
+    title: {
+      ...typography.body,
+      fontWeight: '600',
+      fontSize: 16,
+    },
+    titleDone: {
+      textDecorationLine: 'line-through',
+      color: colors.textMuted,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    subjectBadge: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+      maxWidth: 180,
+    },
+    subjectText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    duePill: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+    },
+    dueText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    deleteBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.dangerSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+    },
+    deleteBtnPressed: {
+      opacity: 0.6,
+    },
+    deleteBtnText: {
+      color: colors.danger,
+      fontSize: 22,
+      fontWeight: '500',
+      lineHeight: 24,
+      // slight nudge so the × sits visually centered
+      marginTop: -2,
+    },
+  });

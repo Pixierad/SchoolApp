@@ -10,7 +10,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
-import { colors, spacing, radius, typography, shadow } from './src/theme';
+import { ThemeProvider, useTheme } from './src/theme';
 import { todayISO, daysBetween, dueStatus } from './src/utils/dates';
 import {
   loadTasks,
@@ -23,10 +23,29 @@ import {
 import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
 import SubjectManager from './src/components/SubjectManager';
+import SettingsSheet from './src/components/SettingsSheet';
 import FilterTabs, { FILTERS } from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 
+// Outer App: just wires providers. All real logic lives in AppContent so
+// that it can call useTheme() from inside the ThemeProvider.
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
+  const { colors, spacing, radius, typography, shadow, isDark } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
   const [tasks, setTasks] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +54,7 @@ export default function App() {
   const [editingTask, setEditingTask] = useState(null); // object or null
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -197,106 +217,116 @@ export default function App() {
 
   if (loading) {
     return (
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </SafeAreaView>
-      </SafeAreaProvider>
+      <SafeAreaView style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <StatusBar style="dark" />
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{greeting()}</Text>
-            <Text style={styles.headerTitle}>Your tasks</Text>
-          </View>
-          <Pressable
-            onPress={() => setSubjectMgrVisible(true)}
-            style={styles.iconBtn}
-            hitSlop={8}
-          >
-            <Text style={styles.iconBtnText}>📚</Text>
-          </Pressable>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.greeting}>{greeting()}</Text>
+          <Text style={styles.headerTitle}>Your tasks</Text>
         </View>
-
-        {/* Progress card */}
-        <ProgressCard progress={progress} />
-
-        {/* Filter tabs */}
-        <FilterTabs value={filter} onChange={setFilter} counts={counts} />
-
-        {/* Task list */}
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-          renderItem={({ item }) => (
-            <TaskCard
-              task={item}
-              onToggle={() => toggleDone(item.id)}
-              onPress={() => openEditTask(item)}
-              onDelete={() => quickDeleteTask(item.id)}
-            />
-          )}
-          ListEmptyComponent={
-            <EmptyState
-              title={emptyTitleFor(filter, tasks.length)}
-              subtitle={emptySubtitleFor(filter, tasks.length)}
-              icon={emptyIconFor(filter, tasks.length)}
-            />
-          }
-        />
-
-        {/* Floating add button */}
         <Pressable
-          onPress={openNewTask}
-          style={({ pressed }) => [
-            styles.fab,
-            shadow.float,
-            pressed && { transform: [{ scale: 0.95 }] },
-          ]}
+          onPress={() => setSettingsVisible(true)}
+          style={styles.iconBtn}
+          hitSlop={8}
+          accessibilityLabel="Appearance settings"
         >
-          <Text style={styles.fabIcon}>+</Text>
+          <Text style={styles.iconBtnText}>{isDark ? '🌙' : '☀️'}</Text>
         </Pressable>
+        <Pressable
+          onPress={() => setSubjectMgrVisible(true)}
+          style={[styles.iconBtn, { marginLeft: spacing.sm }]}
+          hitSlop={8}
+          accessibilityLabel="Manage subjects"
+        >
+          <Text style={styles.iconBtnText}>📚</Text>
+        </Pressable>
+      </View>
 
-        {/* Modals */}
-        <TaskForm
-          visible={formVisible}
-          task={editingTask}
-          subjects={subjects}
-          onSave={handleSaveTask}
-          onDelete={handleDeleteTask}
-          onCancel={closeForm}
-          onManageSubjects={() => {
-            setFormVisible(false);
-            // Small delay so the sheet animation doesn't overlap
-            setTimeout(() => setSubjectMgrVisible(true), 250);
-          }}
-        />
-        <SubjectManager
-          visible={subjectMgrVisible}
-          subjects={subjects}
-          onChange={updateSubjects}
-          onClose={() => setSubjectMgrVisible(false)}
-          taskCountsBySubject={taskCountsBySubject}
-        />
-      </SafeAreaView>
-    </SafeAreaProvider>
+      {/* Progress card */}
+      <ProgressCard progress={progress} styles={styles} />
+
+      {/* Filter tabs */}
+      <FilterTabs value={filter} onChange={setFilter} counts={counts} />
+
+      {/* Task list */}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        renderItem={({ item }) => (
+          <TaskCard
+            task={item}
+            onToggle={() => toggleDone(item.id)}
+            onPress={() => openEditTask(item)}
+            onDelete={() => quickDeleteTask(item.id)}
+          />
+        )}
+        ListEmptyComponent={
+          <EmptyState
+            title={emptyTitleFor(filter, tasks.length)}
+            subtitle={emptySubtitleFor(filter, tasks.length)}
+            icon={emptyIconFor(filter, tasks.length)}
+          />
+        }
+      />
+
+      {/* Floating add button */}
+      <Pressable
+        onPress={openNewTask}
+        style={({ pressed }) => [
+          styles.fab,
+          shadow.float,
+          pressed && { transform: [{ scale: 0.95 }] },
+        ]}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </Pressable>
+
+      {/* Modals */}
+      <TaskForm
+        visible={formVisible}
+        task={editingTask}
+        subjects={subjects}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+        onCancel={closeForm}
+        onManageSubjects={() => {
+          setFormVisible(false);
+          // Small delay so the sheet animation doesn't overlap
+          setTimeout(() => setSubjectMgrVisible(true), 250);
+        }}
+      />
+      <SubjectManager
+        visible={subjectMgrVisible}
+        subjects={subjects}
+        onChange={updateSubjects}
+        onClose={() => setSubjectMgrVisible(false)}
+        taskCountsBySubject={taskCountsBySubject}
+      />
+      <SettingsSheet
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+      />
+    </SafeAreaView>
   );
 }
 
 // --- Subcomponents kept here because they only care about app-level state ---
 
-function ProgressCard({ progress }) {
+function ProgressCard({ progress, styles }) {
   const { doneCount, total, pct } = progress;
+  const { shadow } = useTheme();
   return (
     <View style={[styles.progressCard, shadow.card]}>
       <View style={{ flex: 1 }}>
@@ -373,106 +403,107 @@ function emptyIconFor(filter, total) {
   }
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  loadingWrap: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  greeting: {
-    ...typography.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  headerTitle: {
-    ...typography.title,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  iconBtnText: {
-    fontSize: 20,
-  },
-  progressCard: {
-    backgroundColor: colors.card,
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  progressLabel: {
-    ...typography.label,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  progressText: {
-    ...typography.body,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.cardMuted,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  // The FlatList itself needs flex:1 so it takes all remaining vertical
-  // space below the filters; otherwise it only sizes to its content and
-  // a gap can appear between filters and the list.
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: 120,
-    flexGrow: 1,
-  },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.xl,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '300',
-    lineHeight: 34,
-  },
-});
+const makeStyles = ({ colors, spacing, radius, typography }) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      display: 'flex',
+      flexDirection: 'column',
+    },
+    loadingWrap: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    greeting: {
+      ...typography.caption,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: 2,
+    },
+    headerTitle: {
+      ...typography.title,
+    },
+    iconBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: radius.pill,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    iconBtnText: {
+      fontSize: 20,
+    },
+    progressCard: {
+      backgroundColor: colors.card,
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.md,
+      padding: spacing.lg,
+      borderRadius: radius.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    progressLabel: {
+      ...typography.label,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    progressText: {
+      ...typography.body,
+      fontWeight: '600',
+      marginBottom: spacing.sm,
+    },
+    progressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.cardMuted,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: colors.primary,
+      borderRadius: 3,
+    },
+    // The FlatList itself needs flex:1 so it takes all remaining vertical
+    // space below the filters; otherwise it only sizes to its content and
+    // a gap can appear between filters and the list.
+    list: {
+      flex: 1,
+    },
+    listContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xs,
+      paddingBottom: 120,
+      flexGrow: 1,
+    },
+    fab: {
+      position: 'absolute',
+      right: spacing.lg,
+      bottom: spacing.xl,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fabIcon: {
+      color: '#fff',
+      fontSize: 32,
+      fontWeight: '300',
+      lineHeight: 34,
+    },
+  });

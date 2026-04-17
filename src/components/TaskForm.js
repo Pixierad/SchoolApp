@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors, spacing, radius, typography, shadow, colorForSubject } from '../theme';
+import { useTheme } from '../theme';
 import { toISODate, fromISODate, relativeLabel } from '../utils/dates';
 
 // Modal that handles both creating and editing a task.
@@ -26,6 +26,12 @@ export default function TaskForm({
   onCancel,
   onManageSubjects,
 }) {
+  const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
   const isEditing = !!task;
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
@@ -119,6 +125,9 @@ export default function TaskForm({
                   label="None"
                   active={!subject}
                   onPress={() => setSubject('')}
+                  styles={styles}
+                  colors={colors}
+                  colorForSubject={colorForSubject}
                 />
                 {subjects.map((s) => (
                   <SubjectChip
@@ -126,6 +135,9 @@ export default function TaskForm({
                     label={s}
                     active={subject === s}
                     onPress={() => setSubject(s)}
+                    styles={styles}
+                    colors={colors}
+                    colorForSubject={colorForSubject}
                   />
                 ))}
                 {subjects.length === 0 ? (
@@ -190,7 +202,7 @@ export default function TaskForm({
   );
 }
 
-function SubjectChip({ label, active, onPress }) {
+function SubjectChip({ label, active, onPress, styles, colors, colorForSubject }) {
   const color = colorForSubject(label === 'None' ? '' : label);
   return (
     <Pressable
@@ -215,162 +227,163 @@ function SubjectChip({ label, active, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  backdropFill: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  sheet: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    maxHeight: '90%',
-    paddingBottom: spacing.lg,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.borderStrong,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 24,
-  },
-  field: {
-    gap: spacing.sm,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  label: {
-    ...typography.label,
-    textTransform: 'uppercase',
-  },
-  manageLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  input: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-  },
-  subjectRow: {
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    maxWidth: 160,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  addSubjectChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-  },
-  addSubjectText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  dateText: {
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  dateTextMuted: {
-    color: colors.textFaint,
-  },
-  dateHint: {
-    fontSize: 13,
-    color: colors.textFaint,
-  },
-  clearText: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  footerRight: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  deleteBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  deleteText: {
-    color: colors.danger,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  cancelBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.cardMuted,
-  },
-  cancelText: {
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-  },
-  saveText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-});
+const makeStyles = ({ colors, spacing, radius, typography }) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    backdropFill: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    sheet: {
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '90%',
+      paddingBottom: spacing.lg,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.borderStrong,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    content: {
+      padding: spacing.lg,
+      gap: spacing.lg,
+    },
+    title: {
+      ...typography.title,
+      fontSize: 24,
+    },
+    field: {
+      gap: spacing.sm,
+    },
+    labelRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    label: {
+      ...typography.label,
+      textTransform: 'uppercase',
+    },
+    manageLink: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      fontSize: 16,
+      color: colors.text,
+    },
+    subjectRow: {
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    chip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      maxWidth: 160,
+    },
+    chipText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    addSubjectChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderStyle: 'dashed',
+    },
+    addSubjectText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    dateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    dateText: {
+      fontSize: 16,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    dateTextMuted: {
+      color: colors.textFaint,
+    },
+    dateHint: {
+      fontSize: 13,
+      color: colors.textFaint,
+    },
+    clearText: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    footerRight: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    deleteBtn: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    deleteText: {
+      color: colors.danger,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    cancelBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+    },
+    cancelText: {
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    saveBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+    },
+    saveText: {
+      color: '#fff',
+      fontWeight: '700',
+    },
+  });

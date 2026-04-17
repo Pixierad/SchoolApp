@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
-import { colors, spacing, radius, typography, shadow, colorForSubject } from '../theme';
+import { useTheme } from '../theme';
 
 // Modal to manage the user's list of subjects.
 // Add: type a name and tap +. Delete: tap the × on a row.
@@ -25,6 +25,12 @@ export default function SubjectManager({
   onClose,
   taskCountsBySubject = {},
 }) {
+  const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
   const [draft, setDraft] = useState('');
 
   // --- Swipe-to-dismiss gesture ---
@@ -187,141 +193,142 @@ export default function SubjectManager({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  backdropFill: { ...StyleSheet.absoluteFillObject },
-  // Fixed 75% of screen height so the sheet is the same size whether the
-  // subjects list is empty or full. The list itself scrolls internally
-  // (flex: 1 on the FlatList / empty container below).
-  sheet: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    height: '75%',
-    paddingBottom: spacing.lg,
-  },
-  // Encompasses the handle bar AND the header row. The pan responder is
-  // attached to this whole area, so users can drag down from anywhere at
-  // the top of the sheet — not just the tiny handle itself.
-  dragZone: {
-    paddingBottom: spacing.sm,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.borderStrong,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 22,
-  },
-  doneText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  addRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-  },
-  addBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnText: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: '300',
-    lineHeight: 28,
-  },
-  // flex: 1 on both the empty state and the list container so they consume
-  // the remaining space inside the fixed-height sheet. Without this, an
-  // empty list would collapse and make the sheet look off.
-  empty: {
-    flex: 1,
-    padding: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    ...typography.bodyMuted,
-    textAlign: 'center',
-  },
-  // Outer style: take all remaining vertical space inside the fixed-height
-  // sheet so the list scrolls internally.
-  listOuter: {
-    flex: 1,
-  },
-  list: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: radius.md,
-    gap: spacing.md,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  rowTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  rowMeta: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  removeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  removeText: {
-    fontSize: 20,
-    fontWeight: '400',
-    color: colors.textMuted,
-    lineHeight: 22,
-  },
-});
+const makeStyles = ({ colors, spacing, radius, typography }) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    backdropFill: { ...StyleSheet.absoluteFillObject },
+    // Fixed 75% of screen height so the sheet is the same size whether the
+    // subjects list is empty or full. The list itself scrolls internally
+    // (flex: 1 on the FlatList / empty container below).
+    sheet: {
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      height: '75%',
+      paddingBottom: spacing.lg,
+    },
+    // Encompasses the handle bar AND the header row. The pan responder is
+    // attached to this whole area, so users can drag down from anywhere at
+    // the top of the sheet — not just the tiny handle itself.
+    dragZone: {
+      paddingBottom: spacing.sm,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.borderStrong,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+    },
+    title: {
+      ...typography.title,
+      fontSize: 22,
+    },
+    doneText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    addRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      fontSize: 16,
+      color: colors.text,
+    },
+    addBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addBtnText: {
+      color: '#fff',
+      fontSize: 26,
+      fontWeight: '300',
+      lineHeight: 28,
+    },
+    // flex: 1 on both the empty state and the list container so they consume
+    // the remaining space inside the fixed-height sheet. Without this, an
+    // empty list would collapse and make the sheet look off.
+    empty: {
+      flex: 1,
+      padding: spacing.xl,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyText: {
+      ...typography.bodyMuted,
+      textAlign: 'center',
+    },
+    // Outer style: take all remaining vertical space inside the fixed-height
+    // sheet so the list scrolls internally.
+    listOuter: {
+      flex: 1,
+    },
+    list: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.lg,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.md,
+      borderRadius: radius.md,
+      gap: spacing.md,
+    },
+    dot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    rowTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    rowMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    removeBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.5)',
+    },
+    removeText: {
+      fontSize: 20,
+      fontWeight: '400',
+      color: colors.textMuted,
+      lineHeight: 22,
+    },
+  });
