@@ -16,6 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../theme';
 import { toISODate, fromISODate, relativeLabel } from '../utils/dates';
+import { findSubject, resolveSubjectStyle } from '../utils/subjects';
 
 // Modal that handles both creating and editing a task.
 // If `task` prop is present, we're editing; otherwise creating.
@@ -33,7 +34,7 @@ export default function TaskForm({
   // can temporarily hide the form without wiping what the user typed.
   resetKey,
 }) {
-  const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
+  const { colors, spacing, radius, typography, shadow, colorForSubject, isDark } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),
     [colors, spacing, radius, typography]
@@ -175,21 +176,27 @@ export default function TaskForm({
               >
                 <SubjectChip
                   label="None"
+                  name=""
                   active={!subject}
                   onPress={() => setSubject('')}
+                  subjects={subjects}
                   styles={styles}
                   colors={colors}
                   colorForSubject={colorForSubject}
+                  isDark={isDark}
                 />
                 {subjects.map((s) => (
                   <SubjectChip
-                    key={s}
-                    label={s}
-                    active={subject === s}
-                    onPress={() => setSubject(s)}
+                    key={s.name}
+                    label={s.name}
+                    name={s.name}
+                    active={subject === s.name}
+                    onPress={() => setSubject(s.name)}
+                    subjects={subjects}
                     styles={styles}
                     colors={colors}
                     colorForSubject={colorForSubject}
+                    isDark={isDark}
                   />
                 ))}
                 {subjects.length === 0 ? (
@@ -198,6 +205,18 @@ export default function TaskForm({
                   </Pressable>
                 ) : null}
               </ScrollView>
+
+              {/* Selected subject details — only visible in the task detail
+                  sheet (not on the home page). Shows Room + Teacher next
+                  to the subject so you have context while editing. */}
+              <SubjectDetails
+                name={subject}
+                subjects={subjects}
+                styles={styles}
+                colors={colors}
+                colorForSubject={colorForSubject}
+                isDark={isDark}
+              />
             </View>
 
             {/* Due date */}
@@ -304,8 +323,10 @@ export default function TaskForm({
   );
 }
 
-function SubjectChip({ label, active, onPress, styles, colors, colorForSubject }) {
-  const color = colorForSubject(label === 'None' ? '' : label);
+function SubjectChip({ label, name, active, onPress, subjects, styles, colors, colorForSubject, isDark }) {
+  const color = name
+    ? resolveSubjectStyle(name, subjects, { colorForSubject, isDark })
+    : colorForSubject('');
   return (
     <Pressable
       onPress={onPress}
@@ -326,6 +347,51 @@ function SubjectChip({ label, active, onPress, styles, colors, colorForSubject }
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+// Inline detail row under the subject chips. Shows the subject name
+// together with its Room and Teacher metadata. Only rendered when a
+// subject is selected and at least one detail is present (or always,
+// if you want it as a placeholder — currently only when something exists).
+function SubjectDetails({ name, subjects, styles, colors, colorForSubject, isDark }) {
+  const subject = findSubject(name, subjects);
+  if (!subject) return null;
+  const color = resolveSubjectStyle(name, subjects, { colorForSubject, isDark });
+  const hasDetails = subject.room || subject.teacher;
+  return (
+    <View style={[styles.subjectDetail, { backgroundColor: color.bg, borderColor: color.fg }]}>
+      <View style={[styles.subjectDetailDot, { backgroundColor: color.fg }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.subjectDetailName, { color: color.fg }]} numberOfLines={1}>
+          {subject.name}
+        </Text>
+        {hasDetails ? (
+          <View style={styles.subjectDetailMetaRow}>
+            {subject.room ? (
+              <View style={styles.subjectDetailMetaItem}>
+                <Text style={styles.subjectDetailMetaLabel}>Room</Text>
+                <Text style={[styles.subjectDetailMetaValue, { color: colors.text }]} numberOfLines={1}>
+                  {subject.room}
+                </Text>
+              </View>
+            ) : null}
+            {subject.teacher ? (
+              <View style={styles.subjectDetailMetaItem}>
+                <Text style={styles.subjectDetailMetaLabel}>Teacher</Text>
+                <Text style={[styles.subjectDetailMetaValue, { color: colors.text }]} numberOfLines={1}>
+                  {subject.teacher}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={[styles.subjectDetailMetaValue, { color: colors.textMuted, fontSize: 12 }]}>
+            No room or teacher set — tap "Manage" to add them.
+          </Text>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -422,6 +488,45 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 13,
       fontWeight: '600',
       color: colors.primary,
+    },
+    subjectDetail: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      marginTop: spacing.sm,
+    },
+    subjectDetailDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginTop: 6,
+    },
+    subjectDetailName: {
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    subjectDetailMetaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.lg,
+      marginTop: spacing.xs,
+    },
+    subjectDetailMetaItem: {
+      flexDirection: 'column',
+    },
+    subjectDetailMetaLabel: {
+      ...typography.label,
+      fontSize: 11,
+      textTransform: 'uppercase',
+      color: colors.textMuted,
+    },
+    subjectDetailMetaValue: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginTop: 2,
     },
     dateButton: {
       flexDirection: 'row',

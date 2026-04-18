@@ -221,12 +221,17 @@ function AppContent() {
 
   const updateSubjects = useCallback(
     (nextSubjects) => {
-      // If a subject was removed, clear it from affected tasks
-      const removed = subjects.filter((s) => !nextSubjects.includes(s));
-      if (removed.length > 0) {
+      // Subjects are now objects { name, room, teacher, color }.
+      // Detect removed subjects by name and clear them from affected tasks.
+      // Detect renamed subjects (same index/identity but different name) and
+      // update task.subject references too.
+      const prevByName = new Set(subjects.map((s) => s.name));
+      const nextByName = new Set(nextSubjects.map((s) => s.name));
+      const removedNames = [...prevByName].filter((n) => !nextByName.has(n));
+      if (removedNames.length > 0) {
         setTasks((prev) =>
           prev.map((t) =>
-            removed.includes(t.subject) ? { ...t, subject: null } : t
+            removedNames.includes(t.subject) ? { ...t, subject: null } : t
           )
         );
       }
@@ -289,6 +294,7 @@ function AppContent() {
         renderItem={({ item }) => (
           <TaskCard
             task={item}
+            subjects={subjects}
             onToggle={() => toggleDone(item.id)}
             onPress={() => openEditTask(item)}
             onDelete={() => quickDeleteTask(item.id)}

@@ -27,13 +27,38 @@ export async function saveTasks(tasks) {
 }
 
 // --- Subjects ---
+//
+// A subject is now an object: { name, room, teacher, color }
+//   - name:    display name and the key used by tasks (task.subject === subject.name)
+//   - room:    optional room number / location string
+//   - teacher: optional teacher name
+//   - color:   optional hex like "#5B6CFF" — overrides the auto hashed color
+//
+// Older versions stored subjects as plain strings. We migrate those to
+// objects on load so the rest of the app sees a consistent shape.
+
+export function normalizeSubject(s) {
+  if (typeof s === 'string') {
+    return { name: s, room: '', teacher: '', color: null };
+  }
+  if (s && typeof s === 'object' && typeof s.name === 'string') {
+    return {
+      name: s.name,
+      room: typeof s.room === 'string' ? s.room : '',
+      teacher: typeof s.teacher === 'string' ? s.teacher : '',
+      color: typeof s.color === 'string' && s.color ? s.color : null,
+    };
+  }
+  return null;
+}
 
 export async function loadSubjects() {
   try {
     const raw = await AsyncStorage.getItem(SUBJECTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeSubject).filter(Boolean);
   } catch (e) {
     console.warn('Failed to load subjects:', e);
     return [];

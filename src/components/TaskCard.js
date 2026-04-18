@@ -1,20 +1,24 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
+import { resolveSubjectStyle } from '../utils/subjects';
 import { relativeLabel, dueStatus } from '../utils/dates';
 
 // A single task row: checkbox, title, subject badge, due date pill.
 // Tap the card to edit. Tap the checkbox to toggle done.
 // Once a task is done, a small delete button appears on the right as a
 // shortcut to clear it out without opening the edit sheet.
-export default function TaskCard({ task, onToggle, onPress, onDelete }) {
-  const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
+//
+// On the home screen we deliberately show ONLY the subject name in the
+// badge — extras like room/teacher belong in the task detail sheet.
+export default function TaskCard({ task, subjects = [], onToggle, onPress, onDelete }) {
+  const { colors, spacing, radius, typography, shadow, colorForSubject, isDark } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),
     [colors, spacing, radius, typography]
   );
 
-  const subjectColor = colorForSubject(task.subject);
+  const subjectColor = resolveSubjectStyle(task.subject, subjects, { colorForSubject, isDark });
   const status = dueStatus(task.dueDate, task.done);
   const duePill = dueStyleFor(status, colors);
 
