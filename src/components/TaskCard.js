@@ -45,6 +45,14 @@ export default function TaskCard({ task, onToggle, onPress, onDelete }) {
         >
           {task.title}
         </Text>
+        {task.description ? (
+          <Text
+            style={[styles.description, task.done && styles.descriptionDone]}
+            numberOfLines={2}
+          >
+            {task.description}
+          </Text>
+        ) : null}
         <View style={styles.metaRow}>
           {task.subject ? (
             <View style={[styles.subjectBadge, { backgroundColor: subjectColor.bg }]}>
@@ -147,6 +155,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     titleDone: {
       textDecorationLine: 'line-through',
       color: colors.textMuted,
+    },
+    description: {
+      ...typography.bodyMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textMuted,
+      marginTop: -2,
+    },
+    descriptionDone: {
+      color: colors.textFaint,
     },
     metaRow: {
       flexDirection: 'row',

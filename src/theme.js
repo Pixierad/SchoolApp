@@ -1,8 +1,9 @@
 // Design tokens + theming.
 //
-// Theme is dynamic: users can toggle dark/light mode and pick an accent
-// color. A ThemeProvider at the root holds the current selection, persists
-// it to AsyncStorage, and exposes it via the useTheme() hook.
+// Theme is dynamic: users can pick from a set of preset themes (light,
+// dark, moody, cute, midnight, shadow zone, ...) or create their own
+// custom theme. A ThemeProvider at the root holds the current selection,
+// persists it to AsyncStorage, and exposes it via the useTheme() hook.
 //
 // Most screens do:
 //   const { colors, spacing, radius, typography, shadow } = useTheme();
@@ -11,7 +12,7 @@
 // Static things (spacing, radius) don't change with the theme, but we still
 // surface them through useTheme() so callers have one import.
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ── Static tokens ───────────────────────────────────────────────────────────
@@ -33,25 +34,7 @@ export const radius = {
   pill: 999,
 };
 
-// ── Accent presets ──────────────────────────────────────────────────────────
-// Each accent has a primary (full saturation) and a soft variant used for
-// backgrounds of accent-tinted elements (pills, badges, icon circles).
-// The "soft" variant differs between light and dark mode.
-
-export const ACCENTS = {
-  red:    { label: 'Red',    primary: '#FF3E38', softLight: '#FFE4E3', softDark: '#4D1F1D' },
-  indigo: { label: 'Indigo', primary: '#5B6CFF', softLight: '#EEF0FF', softDark: '#262C4D' },
-  teal:   { label: 'Teal',   primary: '#14B8A6', softLight: '#CCFBF1', softDark: '#0F3F3A' },
-  amber:  { label: 'Amber',  primary: '#F59E0B', softLight: '#FEF3C7', softDark: '#4D3A12' },
-  rose:   { label: 'Rose',   primary: '#F43F5E', softLight: '#FFE4E6', softDark: '#4D1F2A' },
-  green:  { label: 'Green',  primary: '#10B981', softLight: '#D1FAE5', softDark: '#134034' },
-  violet: { label: 'Violet', primary: '#8B5CF6', softLight: '#EDE9FE', softDark: '#2E1E4D' },
-  slate:  { label: 'Slate',  primary: '#475569', softLight: '#E2E8F0', softDark: '#2A2F3D' },
-};
-
-export const ACCENT_KEYS = Object.keys(ACCENTS);
-
-// ── Surface palettes (light/dark) ───────────────────────────────────────────
+// ── Surface palettes used by light-based and dark-based presets ─────────────
 
 const LIGHT_SURFACE = {
   bg: '#F5F6FA',
@@ -91,6 +74,191 @@ const DARK_SURFACE = {
   dangerSoft: '#4D1F1D',
 };
 
+// ── Theme presets ───────────────────────────────────────────────────────────
+// Each preset defines: a base mode (dark?), a full surface palette, a primary
+// accent and its "soft" tint. Soft tints are used for pills, badges, and
+// backgrounds of accent-tinted elements.
+
+export const THEME_PRESETS = {
+  light: {
+    label: 'Light',
+    emoji: '☀️',
+    isDark: false,
+    surface: LIGHT_SURFACE,
+    primary: '#FF3E38',
+    primarySoft: '#FFE4E3',
+    description: 'Crisp and bright for daytime use.',
+  },
+  dark: {
+    label: 'Dark',
+    emoji: '🌙',
+    isDark: true,
+    surface: DARK_SURFACE,
+    primary: '#FF3E38',
+    primarySoft: '#4D1F1D',
+    description: 'Easier on the eyes in low light.',
+  },
+  moody: {
+    label: 'Moody',
+    emoji: '🔮',
+    isDark: true,
+    surface: {
+      bg: '#1A1022',
+      card: '#2A1E3B',
+      cardMuted: '#3A2A4F',
+      text: '#F0E4F7',
+      textMuted: '#BBA5CC',
+      textFaint: '#8877A0',
+      border: '#3A2A4F',
+      borderStrong: '#523D6B',
+      overlay: 'rgba(0, 0, 0, 0.7)',
+      shadow: '#000000',
+      success: '#5ED8A6',
+      successSoft: '#1F4031',
+      warning: '#F2B97E',
+      warningSoft: '#442E1A',
+      danger: '#FF7A8A',
+      dangerSoft: '#4B1F2A',
+    },
+    primary: '#C084FC',
+    primarySoft: '#3D2A5C',
+    description: 'Rich purples and hushed lighting.',
+  },
+  cute: {
+    label: 'Cute',
+    emoji: '🌸',
+    isDark: false,
+    surface: {
+      bg: '#FFF0F5',
+      card: '#FFFFFF',
+      cardMuted: '#FFE4EB',
+      text: '#4A2E3B',
+      textMuted: '#8B6377',
+      textFaint: '#B992A3',
+      border: '#FCD5E0',
+      borderStrong: '#F6A8C0',
+      overlay: 'rgba(178, 78, 110, 0.35)',
+      shadow: '#C86A87',
+      success: '#7ED3A0',
+      successSoft: '#D7F7E3',
+      warning: '#F4B860',
+      warningSoft: '#FFE9C8',
+      danger: '#FF6B8E',
+      dangerSoft: '#FFD5DF',
+    },
+    primary: '#EC4899',
+    primarySoft: '#FCE7F3',
+    description: 'Soft pastels with a little sparkle.',
+  },
+  midnight: {
+    label: 'Midnight',
+    emoji: '✨',
+    isDark: true,
+    surface: {
+      bg: '#040814',
+      card: '#0B1325',
+      cardMuted: '#141D35',
+      text: '#E5EDFF',
+      textMuted: '#8FA3CC',
+      textFaint: '#5E7299',
+      border: '#152041',
+      borderStrong: '#22305E',
+      overlay: 'rgba(0, 0, 0, 0.75)',
+      shadow: '#000000',
+      success: '#5ADB9A',
+      successSoft: '#0F3A2A',
+      warning: '#F1C77A',
+      warningSoft: '#3D2F13',
+      danger: '#FF7B7B',
+      dangerSoft: '#4A1D1D',
+    },
+    primary: '#60A5FA',
+    primarySoft: '#1A2A55',
+    description: 'Deep blue like a starlit sky.',
+  },
+  shadow: {
+    label: 'Shadow Zone',
+    emoji: '🗡️',
+    isDark: true,
+    surface: {
+      bg: '#080808',
+      card: '#141414',
+      cardMuted: '#1F1F1F',
+      text: '#EDEDED',
+      textMuted: '#9A9A9A',
+      textFaint: '#6B6B6B',
+      border: '#242424',
+      borderStrong: '#3A3A3A',
+      overlay: 'rgba(0, 0, 0, 0.8)',
+      shadow: '#000000',
+      success: '#4ADE80',
+      successSoft: '#0F2E1D',
+      warning: '#FBBF24',
+      warningSoft: '#3B2C0C',
+      danger: '#F87171',
+      dangerSoft: '#3B1414',
+    },
+    primary: '#DC2626',
+    primarySoft: '#3B0C0C',
+    description: 'All darkness, a single ember glowing.',
+  },
+  mint: {
+    label: 'Fresh Mint',
+    emoji: '🌿',
+    isDark: false,
+    surface: {
+      bg: '#F0FAF6',
+      card: '#FFFFFF',
+      cardMuted: '#DDF3E9',
+      text: '#15302A',
+      textMuted: '#5A7A6E',
+      textFaint: '#93ACA2',
+      border: '#C7E8D9',
+      borderStrong: '#A3D4BE',
+      overlay: 'rgba(20, 60, 50, 0.4)',
+      shadow: '#2E6F5E',
+      success: '#10B981',
+      successSoft: '#D1FAE5',
+      warning: '#F59E0B',
+      warningSoft: '#FEF3C7',
+      danger: '#EF4444',
+      dangerSoft: '#FEE2E2',
+    },
+    primary: '#059669',
+    primarySoft: '#CCFBEF',
+    description: 'Crisp greens for a clean vibe.',
+  },
+  sunset: {
+    label: 'Sunset',
+    emoji: '🌅',
+    isDark: false,
+    surface: {
+      bg: '#FFF5EC',
+      card: '#FFFFFF',
+      cardMuted: '#FFE6D2',
+      text: '#3B1E0F',
+      textMuted: '#865C42',
+      textFaint: '#B58F76',
+      border: '#FAD3B5',
+      borderStrong: '#F2B487',
+      overlay: 'rgba(120, 60, 20, 0.45)',
+      shadow: '#7A3A14',
+      success: '#10B981',
+      successSoft: '#D1FAE5',
+      warning: '#F59E0B',
+      warningSoft: '#FEF3C7',
+      danger: '#EF4444',
+      dangerSoft: '#FEE2E2',
+    },
+    primary: '#F97316',
+    primarySoft: '#FFDFC2',
+    description: 'Warm orange like fading daylight.',
+  },
+};
+
+export const THEME_PRESET_KEYS = Object.keys(THEME_PRESETS);
+export const CUSTOM_THEME_PREFIX = 'custom:';
+
 // ── Subject palettes (mode-aware) ───────────────────────────────────────────
 
 const LIGHT_SUBJECT_PALETTE = [
@@ -123,18 +291,80 @@ function hashSubject(name) {
   return h;
 }
 
-// ── buildTheme ──────────────────────────────────────────────────────────────
+// ── Color utilities ─────────────────────────────────────────────────────────
+// Custom themes only ask the user for a primary color. We derive a matching
+// "soft" variant from that hex so badges and pills look right.
 
-export function buildTheme(mode = 'light', accentKey = 'red') {
-  const isDark = mode === 'dark';
-  const surface = isDark ? DARK_SURFACE : LIGHT_SURFACE;
-  const accent = ACCENTS[accentKey] ?? ACCENTS.red;
-  const primarySoft = isDark ? accent.softDark : accent.softLight;
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function hexToRgb(hex) {
+  if (typeof hex !== 'string') return { r: 0, g: 0, b: 0 };
+  let h = hex.replace('#', '').trim();
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6) return { r: 0, g: 0, b: 0 };
+  const num = parseInt(h, 16);
+  if (Number.isNaN(num)) return { r: 0, g: 0, b: 0 };
+  return {
+    r: (num >> 16) & 0xff,
+    g: (num >> 8) & 0xff,
+    b: num & 0xff,
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  const toHex = (v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// Lighten / darken by mixing with white (amount in 0..1 toward white)
+// or black (negative amount toward black).
+function mix(hex, towardHex, amount) {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(towardHex);
+  const t = clamp(amount, 0, 1);
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * t,
+    g: a.g + (b.g - a.g) * t,
+    b: a.b + (b.b - a.b) * t,
+  });
+}
+
+export function softFromPrimary(primary, isDark) {
+  // Light themes: mix toward white, Dark themes: mix toward black, to get
+  // a gentle backdrop for accent-tinted pills.
+  return isDark ? mix(primary, '#000000', 0.7) : mix(primary, '#FFFFFF', 0.82);
+}
+
+export function isValidHex(hex) {
+  if (typeof hex !== 'string') return false;
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex.trim());
+}
+
+// ── buildTheme ──────────────────────────────────────────────────────────────
+// Given a resolved theme definition (one of THEME_PRESETS or a user-defined
+// custom theme object), produce the full set of design tokens used by the
+// rest of the app.
+
+function resolveThemeDef(themeKey, customThemes) {
+  if (themeKey && THEME_PRESETS[themeKey]) return THEME_PRESETS[themeKey];
+  if (themeKey && Array.isArray(customThemes)) {
+    const found = customThemes.find((t) => t.key === themeKey);
+    if (found) return found;
+  }
+  return THEME_PRESETS.light;
+}
+
+export function buildTheme(themeKey = 'light', customThemes = []) {
+  const def = resolveThemeDef(themeKey, customThemes);
+  const isDark = !!def.isDark;
+  const surface = def.surface ?? (isDark ? DARK_SURFACE : LIGHT_SURFACE);
 
   const colors = {
     ...surface,
-    primary: accent.primary,
-    primarySoft,
+    primary: def.primary,
+    primarySoft: def.primarySoft ?? softFromPrimary(def.primary, isDark),
     primaryText: '#FFFFFF',
   };
 
@@ -165,12 +395,11 @@ export function buildTheme(mode = 'light', accentKey = 'red') {
     },
   };
 
-  // colorForSubject closure — captures current mode so callers don't need
-  // to pass it in.
   const subjectPalette = isDark ? DARK_SUBJECT_PALETTE : LIGHT_SUBJECT_PALETTE;
-  const fallback = isDark
-    ? { bg: DARK_SURFACE.cardMuted, fg: DARK_SURFACE.textMuted }
-    : { bg: LIGHT_SURFACE.cardMuted, fg: LIGHT_SURFACE.textMuted };
+  const fallback = {
+    bg: surface.cardMuted,
+    fg: surface.textMuted,
+  };
 
   function colorForSubject(name) {
     if (!name) return fallback;
@@ -178,8 +407,11 @@ export function buildTheme(mode = 'light', accentKey = 'red') {
   }
 
   return {
-    mode,
-    accent: accentKey,
+    themeKey,
+    themeLabel: def.label,
+    themeEmoji: def.emoji,
+    themeDescription: def.description,
+    isCustom: !!def.isCustom,
     isDark,
     colors,
     spacing,
@@ -190,35 +422,105 @@ export function buildTheme(mode = 'light', accentKey = 'red') {
   };
 }
 
+// A lightweight version used by SettingsSheet previews without rebuilding
+// every token: returns just the colors + isDark for a given theme key.
+export function previewColorsFor(themeKey, customThemes = []) {
+  const def = resolveThemeDef(themeKey, customThemes);
+  const isDark = !!def.isDark;
+  const surface = def.surface ?? (isDark ? DARK_SURFACE : LIGHT_SURFACE);
+  return {
+    isDark,
+    bg: surface.bg,
+    card: surface.card,
+    text: surface.text,
+    textMuted: surface.textMuted,
+    border: surface.border,
+    primary: def.primary,
+    primarySoft: def.primarySoft ?? softFromPrimary(def.primary, isDark),
+    label: def.label,
+    emoji: def.emoji,
+    description: def.description,
+    isCustom: !!def.isCustom,
+  };
+}
+
+// ── Custom theme helpers ────────────────────────────────────────────────────
+// A custom theme is an object of shape:
+//   { key, label, isDark, primary, primarySoft, surface, isCustom: true }
+// The `surface` is inherited from the base (light/dark) so we don't have to
+// ask the user for 20 colors.
+
+export function makeCustomTheme({ name, baseIsDark, primary }) {
+  const trimmedName = (name || '').trim() || 'My theme';
+  const isDark = !!baseIsDark;
+  const safePrimary = isValidHex(primary) ? primary : '#5B6CFF';
+  return {
+    key: `${CUSTOM_THEME_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    label: trimmedName,
+    emoji: isDark ? '🌑' : '🎨',
+    isDark,
+    surface: isDark ? DARK_SURFACE : LIGHT_SURFACE,
+    primary: safePrimary,
+    primarySoft: softFromPrimary(safePrimary, isDark),
+    description: isDark ? 'Custom dark theme.' : 'Custom light theme.',
+    isCustom: true,
+  };
+}
+
 // ── Context + Provider + hook ───────────────────────────────────────────────
 
-const MODE_KEY = '@simpleapp:theme:mode:v1';
-const ACCENT_KEY = '@simpleapp:theme:accent:v1';
+const THEME_KEY = '@simpleapp:theme:key:v2';
+const CUSTOM_THEMES_KEY = '@simpleapp:theme:customs:v1';
+// Legacy keys from the pre-theme-overhaul version — migrated on load.
+const LEGACY_MODE_KEY = '@simpleapp:theme:mode:v1';
+const LEGACY_ACCENT_KEY = '@simpleapp:theme:accent:v1';
 
-const DEFAULT_MODE = 'light';
-const DEFAULT_ACCENT = 'red';
+const DEFAULT_THEME = 'light';
 
 const ThemeContext = createContext({
-  ...buildTheme(DEFAULT_MODE, DEFAULT_ACCENT),
-  setMode: () => {},
-  setAccent: () => {},
+  ...buildTheme(DEFAULT_THEME, []),
+  customThemes: [],
+  setTheme: () => {},
+  addCustomTheme: () => null,
+  deleteCustomTheme: () => {},
 });
 
 export function ThemeProvider({ children }) {
-  const [mode, setMode] = useState(DEFAULT_MODE);
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
+  const [themeKey, setThemeKey] = useState(DEFAULT_THEME);
+  const [customThemes, setCustomThemes] = useState([]);
   const [hydrated, setHydrated] = useState(false);
 
-  // Load saved prefs on mount
+  // Load saved prefs on mount (with migration from legacy mode+accent).
   useEffect(() => {
     (async () => {
       try {
-        const [m, a] = await Promise.all([
-          AsyncStorage.getItem(MODE_KEY),
-          AsyncStorage.getItem(ACCENT_KEY),
+        const [storedKey, storedCustomsRaw, legacyMode, legacyAccent] = await Promise.all([
+          AsyncStorage.getItem(THEME_KEY),
+          AsyncStorage.getItem(CUSTOM_THEMES_KEY),
+          AsyncStorage.getItem(LEGACY_MODE_KEY),
+          AsyncStorage.getItem(LEGACY_ACCENT_KEY),
         ]);
-        if (m === 'dark' || m === 'light') setMode(m);
-        if (a && ACCENTS[a]) setAccent(a);
+
+        let customs = [];
+        if (storedCustomsRaw) {
+          try {
+            const parsed = JSON.parse(storedCustomsRaw);
+            if (Array.isArray(parsed)) customs = parsed.filter((t) => t && t.key);
+          } catch {
+            customs = [];
+          }
+        }
+        setCustomThemes(customs);
+
+        if (storedKey && (THEME_PRESETS[storedKey] || customs.some((t) => t.key === storedKey))) {
+          setThemeKey(storedKey);
+        } else if (legacyMode === 'dark') {
+          // Best-effort migration: fall back to 'dark' preset.
+          setThemeKey('dark');
+        } else if (legacyMode === 'light') {
+          setThemeKey('light');
+        }
+        // legacyAccent is dropped silently — accent is now part of the theme.
       } catch (e) {
         console.warn('Failed to load theme prefs:', e);
       } finally {
@@ -227,22 +529,44 @@ export function ThemeProvider({ children }) {
     })();
   }, []);
 
-  // Persist changes (skip first render so we don't overwrite stored value
+  // Persist changes (skip until hydrated so we don't overwrite stored value
   // with defaults before load finishes).
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(MODE_KEY, mode).catch(() => {});
-  }, [mode, hydrated]);
+    AsyncStorage.setItem(THEME_KEY, themeKey).catch(() => {});
+  }, [themeKey, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(ACCENT_KEY, accent).catch(() => {});
-  }, [accent, hydrated]);
+    AsyncStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(customThemes)).catch(() => {});
+  }, [customThemes, hydrated]);
+
+  const setTheme = useCallback((key) => {
+    setThemeKey(key);
+  }, []);
+
+  const addCustomTheme = useCallback((partial) => {
+    const theme = makeCustomTheme(partial);
+    setCustomThemes((prev) => [...prev, theme]);
+    setThemeKey(theme.key); // auto-select the newly created theme
+    return theme;
+  }, []);
+
+  const deleteCustomTheme = useCallback((key) => {
+    setCustomThemes((prev) => prev.filter((t) => t.key !== key));
+    setThemeKey((curr) => (curr === key ? DEFAULT_THEME : curr));
+  }, []);
 
   const value = useMemo(() => {
-    const theme = buildTheme(mode, accent);
-    return { ...theme, setMode, setAccent };
-  }, [mode, accent]);
+    const theme = buildTheme(themeKey, customThemes);
+    return {
+      ...theme,
+      customThemes,
+      setTheme,
+      addCustomTheme,
+      deleteCustomTheme,
+    };
+  }, [themeKey, customThemes, setTheme, addCustomTheme, deleteCustomTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

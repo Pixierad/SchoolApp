@@ -39,6 +39,7 @@ export default function TaskForm({
 
   const isEditing = !!task;
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [subject, setSubject] = useState('');
   const [dueDate, setDueDate] = useState(null); // ISO string or null
   const [showPicker, setShowPicker] = useState(false);
@@ -48,6 +49,7 @@ export default function TaskForm({
   // detour) leaves the draft intact.
   useEffect(() => {
     setTitle(task?.title ?? '');
+    setDescription(task?.description ?? '');
     setSubject(task?.subject ?? '');
     setDueDate(task?.dueDate ?? null);
     setShowPicker(false);
@@ -60,8 +62,10 @@ export default function TaskForm({
       Alert.alert('Missing title', 'Please give your task a name.');
       return;
     }
+    const trimmedDesc = description.trim();
     onSave({
       title: trimmed,
+      description: trimmedDesc || null,
       subject: subject || null,
       dueDate: dueDate || null,
     });
@@ -120,6 +124,22 @@ export default function TaskForm({
                 style={styles.input}
                 autoFocus={!isEditing}
                 returnKeyType="done"
+              />
+            </View>
+
+            {/* Description input */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Description</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Add more details — notes, pages, links, anything (optional)"
+                placeholderTextColor={colors.textFaint}
+                style={[styles.input, styles.inputMultiline]}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                returnKeyType="default"
               />
             </View>
 
@@ -352,6 +372,11 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.md,
       fontSize: 16,
       color: colors.text,
+    },
+    inputMultiline: {
+      minHeight: 96,
+      paddingTop: spacing.md,
+      lineHeight: 22,
     },
     subjectRow: {
       gap: spacing.sm,

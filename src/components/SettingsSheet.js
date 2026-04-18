@@ -10,11 +10,29 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Platform,
+  Alert,
 } from 'react-native';
-import { useTheme, ACCENTS, ACCENT_KEYS } from '../theme';
+import {
+  useTheme,
+  THEME_PRESETS,
+  THEME_PRESET_KEYS,
+  previewColorsFor,
+  isValidHex,
+  softFromPrimary,
+} from '../theme';
 
-// Settings bottom sheet: editable name, dark/light mode toggle, accent color
-// picker. Same swipe-to-dismiss behavior as SubjectManager.
+// A palette of pickable primary colors for the custom-theme builder. Users
+// can also type a hex code manually.
+const CUSTOM_COLOR_OPTIONS = [
+  '#FF3E38', '#F97316', '#F59E0B', '#EAB308',
+  '#10B981', '#059669', '#14B8A6', '#06B6D4',
+  '#3B82F6', '#5B6CFF', '#6366F1', '#8B5CF6',
+  '#A855F7', '#D946EF', '#EC4899', '#F43F5E',
+  '#64748B', '#374151', '#000000', '#FFFFFF',
+];
+
+// Settings bottom sheet: editable name + theme gallery + custom theme builder.
 export default function SettingsSheet({ visible, onClose, userName = '', onNameChange }) {
   const {
     colors,
@@ -22,11 +40,11 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
     radius,
     typography,
     shadow,
-    mode,
-    accent,
-    isDark,
-    setMode,
-    setAccent,
+    themeKey,
+    customThemes,
+    setTheme,
+    addCustomTheme,
+    deleteCustomTheme,
   } = useTheme();
 
   const styles = useMemo(
@@ -37,9 +55,13 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
   // Local draft — synced from prop each time the sheet opens.
   // Saved (via onNameChange) when the user taps Done or dismisses the sheet.
   const [draftName, setDraftName] = useState(userName);
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   useEffect(() => {
-    if (visible) setDraftName(userName);
+    if (visible) {
+      setDraftName(userName);
+      setBuilderOpen(false);
+    }
   }, [visible, userName]);
 
   const commitName = () => {
@@ -98,6 +120,20 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
     })
   ).current;
 
+  const confirmDeleteCustom = (theme) => {
+    const run = () => deleteCustomTheme(theme.key);
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete "${theme.label}"?`)) run();
+      return;
+    }
+    Alert.alert(`Delete "${theme.label}"?`, 'This theme will be removed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: run },
+    ]);
+  };
+
+  const allThemeKeys = [...THEME_PRESET_KEYS, ...customThemes.map((t) => t.key)];
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.backdrop}>
@@ -135,74 +171,280 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
               </Text>
             </View>
 
-            {/* Mode toggle */}
+            {/* Theme gallery */}
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Theme</Text>
-              <View style={styles.segment}>
-                <SegmentButton
-                  label="☀️  Light"
-                  active={mode === 'light'}
-                  onPress={() => setMode('light')}
-                  styles={styles}
-                />
-                <SegmentButton
-                  label="🌙  Dark"
-                  active={mode === 'dark'}
-                  onPress={() => setMode('dark')}
-                  styles={styles}
-                />
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>Theme</Text>
+                <Pressable onPress={() => setBuilderOpen(true)} hitSlop={8}>
+                  <Text style={styles.addLink}>+ New theme</Text>
+                </Pressable>
               </View>
-              <Text style={styles.hint}>
-                {isDark
-                  ? 'Easier on the eyes in low light.'
-                  : 'Crisp and bright for daytime use.'}
-              </Text>
-            </View>
-
-            {/* Accent picker */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Accent color</Text>
-              <View style={styles.swatchGrid}>
-                {ACCENT_KEYS.map((key) => {
-                  const a = ACCENTS[key];
-                  const selected = accent === key;
+              <View style={styles.themeGrid}>
+                {allThemeKeys.map((key) => {
+                  const preview = previewColorsFor(key, customThemes);
+                  const selected = themeKey === key;
                   return (
-                    <Pressable
+                    <ThemeTile
                       key={key}
-                      onPress={() => setAccent(key)}
-                      style={[
-                        styles.swatchWrap,
-                        selected && { borderColor: a.primary },
-                      ]}
-                      accessibilityLabel={a.label}
-                      accessibilityRole="button"
-                    >
-                      <View
-                        style={[
-                          styles.swatch,
-                          { backgroundColor: a.primary },
-                        ]}
-                      >
-                        {selected ? <Text style={styles.swatchCheck}>✓</Text> : null}
-                      </View>
-                      <Text
-                        style={[
-                          styles.swatchLabel,
-                          selected && { color: colors.text, fontWeight: '700' },
-                        ]}
-                      >
-                        {a.label}
-                      </Text>
-                    </Pressable>
+                      preview={preview}
+                      selected={selected}
+                      onPress={() => setTheme(key)}
+                      onLongPress={
+                        preview.isCustom ? () => confirmDeleteCustom({ key, label: preview.label }) : undefined
+                      }
+                      styles={styles}
+                    />
                   );
                 })}
               </View>
               <Text style={styles.hint}>
-                Changes apply instantly — pick what feels right.
+                Pick any theme, or tap "+ New theme" to design your own.
+                Long-press a custom theme to delete it.
               </Text>
             </View>
           </ScrollView>
+
+          {/* Custom theme builder (inline modal on top) */}
+          <CustomThemeBuilder
+            visible={builderOpen}
+            onClose={() => setBuilderOpen(false)}
+            onCreate={(draft) => {
+              addCustomTheme(draft);
+              setBuilderOpen(false);
+            }}
+          />
         </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// A card that previews a theme using its actual bg / card / primary colors.
+function ThemeTile({ preview, selected, onPress, onLongPress, styles }) {
+  const border = selected ? preview.primary : 'transparent';
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={500}
+      style={[styles.themeTile, { borderColor: border, backgroundColor: preview.bg }]}
+      accessibilityLabel={preview.label}
+      accessibilityRole="button"
+    >
+      <View style={styles.themeTileTop}>
+        <Text style={styles.themeTileEmoji}>{preview.emoji || (preview.isDark ? '🌑' : '🎨')}</Text>
+        {selected ? (
+          <View style={[styles.themeTileCheck, { backgroundColor: preview.primary }]}>
+            <Text style={styles.themeTileCheckText}>✓</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={[styles.themeTileCardRow, { backgroundColor: preview.card, borderColor: preview.border }]}>
+        <View style={[styles.themeTileDot, { backgroundColor: preview.primary }]} />
+        <View style={styles.themeTileLines}>
+          <View style={[styles.themeTileLine, { backgroundColor: preview.text, opacity: 0.9 }]} />
+          <View style={[styles.themeTileLine, styles.themeTileLineShort, { backgroundColor: preview.textMuted, opacity: 0.6 }]} />
+        </View>
+      </View>
+      <Text style={[styles.themeTileLabel, { color: preview.text }]} numberOfLines={1}>
+        {preview.label}{preview.isCustom ? ' ✨' : ''}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Inline modal (layered on top of the settings sheet) for creating a
+// custom theme. Asks for: name, light/dark base, primary color.
+function CustomThemeBuilder({ visible, onClose, onCreate }) {
+  const { colors, spacing, radius, typography, shadow } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
+  const [name, setName] = useState('');
+  const [baseIsDark, setBaseIsDark] = useState(false);
+  const [primary, setPrimary] = useState('#5B6CFF');
+
+  useEffect(() => {
+    if (visible) {
+      setName('');
+      setBaseIsDark(false);
+      setPrimary('#5B6CFF');
+    }
+  }, [visible]);
+
+  const canCreate = name.trim().length > 0 && isValidHex(primary);
+
+  const softPreview = softFromPrimary(primary, baseIsDark);
+  const basePalette = baseIsDark
+    ? { bg: '#0F1218', card: '#1A1F2B', text: '#F3F4F8', textMuted: '#9CA3AF', border: '#2A2F3D' }
+    : { bg: '#F5F6FA', card: '#FFFFFF', text: '#1A1D29', textMuted: '#6B7280', border: '#E5E7EB' };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.builderBackdrop}>
+        <Pressable style={styles.backdropFill} onPress={onClose} />
+        <View style={[styles.builderSheet, shadow.float]}>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title}>New theme</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={styles.doneText}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Name */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Theme name</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Cherry blossom"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                autoFocus
+                maxLength={32}
+              />
+            </View>
+
+            {/* Base mode */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Base</Text>
+              <View style={styles.segment}>
+                <SegmentButton
+                  label="☀️  Light base"
+                  active={!baseIsDark}
+                  onPress={() => setBaseIsDark(false)}
+                  styles={styles}
+                />
+                <SegmentButton
+                  label="🌙  Dark base"
+                  active={baseIsDark}
+                  onPress={() => setBaseIsDark(true)}
+                  styles={styles}
+                />
+              </View>
+              <Text style={styles.hint}>
+                Sets the overall background and text colors.
+              </Text>
+            </View>
+
+            {/* Primary color */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Primary color</Text>
+              <View style={styles.colorGrid}>
+                {CUSTOM_COLOR_OPTIONS.map((hex) => {
+                  const selected = primary.toLowerCase() === hex.toLowerCase();
+                  return (
+                    <Pressable
+                      key={hex}
+                      onPress={() => setPrimary(hex)}
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: hex },
+                        selected && { borderColor: colors.text, borderWidth: 3 },
+                      ]}
+                      accessibilityLabel={hex}
+                    />
+                  );
+                })}
+              </View>
+              <TextInput
+                value={primary}
+                onChangeText={(v) => setPrimary(v.startsWith('#') ? v : `#${v}`)}
+                placeholder="#RRGGBB"
+                placeholderTextColor={colors.textFaint}
+                style={[styles.input, { marginTop: spacing.sm }]}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={7}
+              />
+              {!isValidHex(primary) ? (
+                <Text style={[styles.hint, { color: colors.danger }]}>
+                  Hex must look like #RRGGBB (or #RGB).
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Live preview */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Preview</Text>
+              <View
+                style={[
+                  styles.previewPane,
+                  { backgroundColor: basePalette.bg, borderColor: basePalette.border },
+                ]}
+              >
+                <Text style={[styles.previewTitle, { color: basePalette.text }]}>
+                  {name.trim() || 'Your theme'}
+                </Text>
+                <View
+                  style={[
+                    styles.previewCard,
+                    { backgroundColor: basePalette.card, borderColor: basePalette.border },
+                  ]}
+                >
+                  <View style={[styles.previewDot, { backgroundColor: primary }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: basePalette.text, fontWeight: '600' }}>
+                      Read Chapter 4
+                    </Text>
+                    <Text style={{ color: basePalette.textMuted, fontSize: 12 }}>
+                      Due tomorrow
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: softPreview,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: radius.pill,
+                    }}
+                  >
+                    <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>
+                      Soon
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={{
+                    alignSelf: 'flex-start',
+                    backgroundColor: primary,
+                    paddingHorizontal: spacing.lg,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.md,
+                    marginTop: spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>
+                    Sample button
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.builderFooter}>
+            <Pressable
+              onPress={onClose}
+              style={[styles.cancelBtn]}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => canCreate && onCreate({ name, baseIsDark, primary })}
+              disabled={!canCreate}
+              style={[styles.saveBtn, !canCreate && { opacity: 0.5 }]}
+            >
+              <Text style={styles.saveText}>Create theme</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     </Modal>
   );
@@ -233,7 +475,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.bg,
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
-      maxHeight: '85%',
+      maxHeight: '88%',
       paddingBottom: spacing.lg,
     },
     dragZone: {
@@ -277,6 +519,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       textTransform: 'uppercase',
       marginBottom: spacing.xs,
     },
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    addLink: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.primary,
+    },
     hint: {
       ...typography.bodyMuted,
       fontSize: 13,
@@ -292,7 +544,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.text,
     },
 
-    // Segmented control (light/dark)
+    // Segmented control
     segment: {
       flexDirection: 'row',
       backgroundColor: colors.cardMuted,
@@ -319,38 +571,145 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.text,
     },
 
-    // Accent swatches
-    swatchGrid: {
+    // Theme gallery
+    themeGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.md,
       paddingTop: spacing.xs,
     },
-    swatchWrap: {
-      width: 72,
-      alignItems: 'center',
-      gap: spacing.xs,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.md,
+    themeTile: {
+      width: 148,
+      borderRadius: radius.lg,
       borderWidth: 2,
-      borderColor: 'transparent',
+      padding: spacing.md,
+      gap: spacing.sm,
     },
-    swatch: {
-      width: 44,
-      height: 44,
-      borderRadius: radius.pill,
+    themeTileTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    themeTileEmoji: {
+      fontSize: 18,
+    },
+    themeTileCheck: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    swatchCheck: {
+    themeTileCheckText: {
       color: '#fff',
-      fontSize: 20,
+      fontSize: 13,
       fontWeight: '800',
-      lineHeight: 22,
+      lineHeight: 14,
     },
-    swatchLabel: {
-      fontSize: 12,
-      fontWeight: '600',
+    themeTileCardRow: {
+      borderRadius: radius.md,
+      borderWidth: 1,
+      padding: spacing.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    themeTileDot: {
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+    },
+    themeTileLines: {
+      flex: 1,
+      gap: 4,
+    },
+    themeTileLine: {
+      height: 5,
+      borderRadius: 3,
+    },
+    themeTileLineShort: {
+      width: '60%',
+    },
+    themeTileLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    // Custom theme builder
+    builderBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    builderSheet: {
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '92%',
+      paddingBottom: spacing.lg,
+    },
+    colorGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    colorSwatch: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    previewPane: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    previewTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    previewCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      padding: spacing.md,
+    },
+    previewDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    builderFooter: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      justifyContent: 'flex-end',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    cancelBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+    },
+    cancelText: {
       color: colors.textMuted,
+      fontWeight: '600',
+    },
+    saveBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+    },
+    saveText: {
+      color: '#fff',
+      fontWeight: '700',
     },
   });

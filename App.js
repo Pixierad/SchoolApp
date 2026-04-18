@@ -187,6 +187,7 @@ function AppContent() {
         const newTask = {
           id: newId(),
           title: values.title,
+          description: values.description ?? null,
           subject: values.subject,
           dueDate: values.dueDate,
           done: false,
@@ -302,17 +303,8 @@ function AppContent() {
         }
       />
 
-      {/* Floating add button */}
-      <Pressable
-        onPress={openNewTask}
-        style={({ pressed }) => [
-          styles.fab,
-          shadow.float,
-          pressed && { transform: [{ scale: 0.95 }] },
-        ]}
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </Pressable>
+      {/* Floating add button — centered, grows while held */}
+      <AddTaskFab onPress={openNewTask} styles={styles} shadow={shadow} />
 
       {/* Modals */}
       <TaskForm
@@ -371,6 +363,47 @@ function AppContent() {
 }
 
 // --- Subcomponents ---
+
+// Floating "add task" button. Anchored to the horizontal center of the
+// screen, it grows while the user holds it down. On release (or cancel)
+// it springs back. onPress still fires so a quick tap also opens the form.
+function AddTaskFab({ onPress, styles, shadow }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const start = () => {
+    Animated.timing(scale, {
+      toValue: 1.6,
+      duration: 450,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const end = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      bounciness: 10,
+      speed: 14,
+    }).start();
+  };
+
+  return (
+    <View style={styles.fabWrap} pointerEvents="box-none">
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={start}
+          onPressOut={end}
+          accessibilityLabel="Add task"
+          accessibilityRole="button"
+          style={[styles.fab, shadow.float]}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
 
 function ProgressCard({ progress, styles }) {
   const { doneCount, total, pct } = progress;
@@ -561,13 +594,18 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingBottom: 120,
       flexGrow: 1,
     },
-    fab: {
+    fabWrap: {
       position: 'absolute',
-      right: spacing.lg,
+      left: 0,
+      right: 0,
       bottom: spacing.xl,
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fab: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
