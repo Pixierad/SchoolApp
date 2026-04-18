@@ -44,9 +44,15 @@ export default function SubjectManager({
   // from a previous open doesn't leak into the next one.
   useEffect(() => {
     if (visible) {
-      translateY.setValue(0);
+      translateY.setValue(screenHeight);
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 20,
+      }).start();
     }
-  }, [visible, translateY]);
+  }, [visible, translateY, screenHeight]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -123,7 +129,7 @@ export default function SubjectManager({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}

@@ -79,8 +79,16 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
   const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (visible) translateY.setValue(0);
-  }, [visible, translateY]);
+    if (visible) {
+      translateY.setValue(screenHeight);
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 20,
+      }).start();
+    }
+  }, [visible, translateY, screenHeight]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -135,7 +143,7 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
   const allThemeKeys = [...THEME_PRESET_KEYS, ...customThemes.map((t) => t.key)];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropFill} onPress={handleClose} />
         <Animated.View
@@ -266,13 +274,23 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
   const [baseIsDark, setBaseIsDark] = useState(false);
   const [primary, setPrimary] = useState('#5B6CFF');
 
+  const builderScreenHeight = Dimensions.get('window').height;
+  const builderTranslateY = useRef(new Animated.Value(builderScreenHeight)).current;
+
   useEffect(() => {
     if (visible) {
       setName('');
       setBaseIsDark(false);
       setPrimary('#5B6CFF');
+      builderTranslateY.setValue(builderScreenHeight);
+      Animated.spring(builderTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 20,
+      }).start();
     }
-  }, [visible]);
+  }, [visible, builderTranslateY, builderScreenHeight]);
 
   const canCreate = name.trim().length > 0 && isValidHex(primary);
 
@@ -282,10 +300,10 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
     : { bg: '#F5F6FA', card: '#FFFFFF', text: '#1A1D29', textMuted: '#6B7280', border: '#E5E7EB' };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={styles.builderBackdrop}>
         <Pressable style={styles.backdropFill} onPress={onClose} />
-        <View style={[styles.builderSheet, shadow.float]}>
+        <Animated.View style={[styles.builderSheet, shadow.float, { transform: [{ translateY: builderTranslateY }] }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>New theme</Text>
@@ -444,7 +462,7 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
               <Text style={styles.saveText}>Create theme</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

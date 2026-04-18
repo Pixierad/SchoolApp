@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../theme';
@@ -43,6 +45,21 @@ export default function TaskForm({
   const [subject, setSubject] = useState('');
   const [dueDate, setDueDate] = useState(null); // ISO string or null
   const [showPicker, setShowPicker] = useState(false);
+
+  const screenHeight = Dimensions.get('window').height;
+  const translateY = useRef(new Animated.Value(screenHeight)).current;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(screenHeight);
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 20,
+      }).start();
+    }
+  }, [visible, translateY, screenHeight]);
 
   // Reset form only when the parent bumps resetKey, i.e. a fresh open.
   // Re-mounting or flipping `visible` off/on (e.g. during a subject-manager
@@ -95,13 +112,13 @@ export default function TaskForm({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onCancel}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <Pressable style={styles.backdropFill} onPress={onCancel} />
-        <View style={[styles.sheet, shadow.float]}>
+        <Animated.View style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}>
           {/* Handle */}
           <View style={styles.handle} />
 
@@ -281,7 +298,7 @@ export default function TaskForm({
               </Pressable>
             </View>
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
