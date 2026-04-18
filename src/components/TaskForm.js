@@ -62,6 +62,15 @@ export default function TaskForm({
   };
 
   const handleDelete = () => {
+    // On web, Alert.alert with buttons doesn't fire onPress callbacks —
+    // it falls back to window.alert which ignores the buttons array. Use
+    // the browser's native confirm() for web.
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete task?\n\nThis cannot be undone.')) {
+        onDelete?.();
+      }
+      return;
+    }
     Alert.alert('Delete task?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: onDelete },
@@ -346,107 +355,6 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       borderRadius: radius.pill,
-      borderWidth: 1,
-      maxWidth: 160,
-    },
-    chipText: {
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    addSubjectChip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      borderStyle: 'dashed',
-    },
-    addSubjectText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.primary,
-    },
-    dateButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.card,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.md,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    clearBtnWeb: {
-      // Sit above the invisible <input> overlay on web so it remains tappable
-      position: 'relative',
-      zIndex: 2,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-    },
-    dateText: {
-      fontSize: 16,
-      color: colors.text,
-      fontWeight: '500',
-    },
-    dateTextMuted: {
-      color: colors.textFaint,
-    },
-    dateHint: {
-      fontSize: 13,
-      color: colors.textFaint,
-    },
-    clearText: {
-      fontSize: 13,
-      color: colors.primary,
-      fontWeight: '600',
-    },
-    footer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-    footerRight: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    deleteBtn: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-    },
-    deleteText: {
-      color: colors.danger,
-      fontWeight: '600',
-      fontSize: 14,
-    },
-    cancelBtn: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      borderRadius: radius.md,
-      backgroundColor: colors.cardMuted,
-    },
-    cancelText: {
-      color: colors.textMuted,
-      fontWeight: '600',
-    },
-    saveBtn: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      borderRadius: radius.md,
-      backgroundColor: colors.primary,
-    },
-    saveText: {
-      color: '#fff',
-      fontWeight: '700',
-    },
-  });
-dius: radius.pill,
       borderWidth: 1,
       maxWidth: 160,
     },

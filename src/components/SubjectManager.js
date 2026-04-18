@@ -103,6 +103,15 @@ export default function SubjectManager({
       count > 0
         ? `"${name}" is used by ${count} task${count === 1 ? '' : 's'}. Those tasks will lose their subject tag.`
         : `Remove "${name}" from your subjects?`;
+    // On web, React Native's Alert.alert falls back to window.alert and
+    // ignores Cancel/Remove buttons, so the onPress never fires. Use the
+    // browser's native confirm() dialog instead.
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Remove subject?\n\n${message}`)) {
+        onChange(subjects.filter((s) => s !== name));
+      }
+      return;
+    }
     Alert.alert('Remove subject?', message, [
       { text: 'Cancel', style: 'cancel' },
       {
