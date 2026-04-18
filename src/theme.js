@@ -146,7 +146,7 @@ export const THEME_PRESETS = {
       danger: '#FF6B8E',
       dangerSoft: '#FFD5DF',
     },
-    primary: '#EC4899',
+    primary: '#eca4c8',
     primarySoft: '#FCE7F3',
     description: 'Soft pastels with a little sparkle.',
   },
