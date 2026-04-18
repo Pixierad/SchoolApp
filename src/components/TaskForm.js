@@ -25,6 +25,11 @@ export default function TaskForm({
   onDelete,
   onCancel,
   onManageSubjects,
+  // Changes whenever the parent wants a *fresh* form (e.g. opening a new
+  // task or switching to edit a different task). Toggling `visible` alone
+  // no longer resets the draft — that way pop-overs like SubjectManager
+  // can temporarily hide the form without wiping what the user typed.
+  resetKey,
 }) {
   const { colors, spacing, radius, typography, shadow, colorForSubject } = useTheme();
   const styles = useMemo(
@@ -38,15 +43,16 @@ export default function TaskForm({
   const [dueDate, setDueDate] = useState(null); // ISO string or null
   const [showPicker, setShowPicker] = useState(false);
 
-  // Reset form whenever modal opens
+  // Reset form only when the parent bumps resetKey, i.e. a fresh open.
+  // Re-mounting or flipping `visible` off/on (e.g. during a subject-manager
+  // detour) leaves the draft intact.
   useEffect(() => {
-    if (visible) {
-      setTitle(task?.title ?? '');
-      setSubject(task?.subject ?? '');
-      setDueDate(task?.dueDate ?? null);
-      setShowPicker(false);
-    }
-  }, [visible, task]);
+    setTitle(task?.title ?? '');
+    setSubject(task?.subject ?? '');
+    setDueDate(task?.dueDate ?? null);
+    setShowPicker(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   const handleSave = () => {
     const trimmed = title.trim();

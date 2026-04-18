@@ -354,4 +354,3 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
     },
   });
- });

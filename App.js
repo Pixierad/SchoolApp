@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -59,6 +60,16 @@ function AppContent() {
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+
+  // Bumped only when we want TaskForm to reset its internal draft (opening
+  // a brand-new task, or switching to edit a different task). Flipping
+  // formVisible alone does NOT reset — so a detour to SubjectManager and
+  // back preserves whatever the user had typed.
+  const [taskFormResetKey, setTaskFormResetKey] = useState(0);
+  // Tracks whether we hid the form only to show SubjectManager (native
+  // only — on web the form stays mounted). When SubjectManager closes we
+  // re-open the form without bumping resetKey, restoring the draft.
+  const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -148,17 +159,22 @@ function AppContent() {
 
   const openNewTask = () => {
     setEditingTask(null);
+    setTaskFormResetKey((k) => k + 1); // fresh form
     setFormVisible(true);
   };
 
   const openEditTask = (task) => {
     setEditingTask(task);
+    setTaskFormResetKey((k) => k + 1); // load this task's values
     setFormVisible(true);
   };
 
   const closeForm = () => {
     setFormVisible(false);
     setEditingTask(null);
+    // If the user actually closed (saved / cancelled / deleted), don't
+    // auto-resume later from a SubjectManager detour.
+    setResumeFormAfterSubjects(false);
   };
 
   const handleSaveTask = useCallback(
@@ -303,20 +319,42 @@ function AppContent() {
         visible={formVisible}
         task={editingTask}
         subjects={subjects}
+        resetKey={taskFormResetKey}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
         onCancel={closeForm}
         onManageSubjects={() => {
-          setFormVisible(false);
-          // Small delay so the sheet animation doesn't overlap
-          setTimeout(() => setSubjectMgrVisible(true), 250);
+          // Keep TaskForm mounted so the user's in-progress draft (title,
+          // subject selection, date) isn't wiped when they pop over to add
+          // a subject. On web, modals stack cleanly, so we just show the
+          // SubjectManager on top. On native, stacking two bottom-sheet
+          // modals can look janky, so we close the form first and flag it
+          // to be re-opened when SubjectManager closes. Because TaskForm
+          // now only resets on resetKey changes (not on visible flips),
+          // the draft is preserved across the detour.
+          if (Platform.OS === 'web') {
+            setSubjectMgrVisible(true);
+          } else {
+            setFormVisible(false);
+            setResumeFormAfterSubjects(true);
+            setTimeout(() => setSubjectMgrVisible(true), 250);
+          }
         }}
       />
       <SubjectManager
         visible={subjectMgrVisible}
         subjects={subjects}
         onChange={updateSubjects}
-        onClose={() => setSubjectMgrVisible(false)}
+        onClose={() => {
+          setSubjectMgrVisible(false);
+          // On native, re-show the TaskForm if we hid it only to let the
+          // user pop into SubjectManager. resetKey is NOT bumped, so the
+          // user returns to whatever they had typed.
+          if (resumeFormAfterSubjects) {
+            setResumeFormAfterSubjects(false);
+            setTimeout(() => setFormVisible(true), 250);
+          }
+        }}
         taskCountsBySubject={taskCountsBySubject}
       />
       <SettingsSheet
