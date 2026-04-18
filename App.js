@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -26,7 +27,7 @@ import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
 import SubjectManager from './src/components/SubjectManager';
 import SettingsSheet from './src/components/SettingsSheet';
-import FilterTabs, { FILTERS } from './src/components/FilterTabs';
+import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 
 // Outer App: just wires providers. All real logic lives in AppContent so
@@ -331,11 +332,32 @@ function AppContent() {
   );
 }
 
-// --- Subcomponents kept here because they only care about app-level state ---
+// --- Subcomponents ---
 
 function ProgressCard({ progress, styles }) {
   const { doneCount, total, pct } = progress;
   const { shadow } = useTheme();
+
+  // Tween the bar's width whenever pct changes.
+  // useNativeDriver MUST be false: the native driver can't animate layout
+  // properties like width — only transforms and opacity.
+  const animatedPct = useRef(new Animated.Value(pct)).current;
+  useEffect(() => {
+    Animated.timing(animatedPct, {
+      toValue: pct,
+      duration: 450,
+      useNativeDriver: false,
+    }).start();
+  }, [pct, animatedPct]);
+
+  // Interpolate 0..100 → "0%".."100%" so the View's width is a percentage
+  // string (matches the parent track width regardless of screen size).
+  const widthInterpolated = animatedPct.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={[styles.progressCard, shadow.card]}>
       <View style={{ flex: 1 }}>
@@ -346,7 +368,9 @@ function ProgressCard({ progress, styles }) {
             : `${doneCount} of ${total} done (${pct}%)`}
         </Text>
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${pct}%` }]} />
+          <Animated.View
+            style={[styles.progressFill, { width: widthInterpolated }]}
+          />
         </View>
       </View>
     </View>
@@ -517,3 +541,4 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       lineHeight: 34,
     },
   });
+

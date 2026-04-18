@@ -151,29 +151,79 @@ export default function TaskForm({
             {/* Due date */}
             <View style={styles.field}>
               <Text style={styles.label}>Due date</Text>
-              <Pressable
-                onPress={() => setShowPicker((v) => !v)}
-                style={styles.dateButton}
-              >
-                <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
-                  {dueDate ? relativeLabel(dueDate) : 'No due date'}
-                </Text>
-                {dueDate ? (
-                  <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
-                    <Text style={styles.clearText}>Clear</Text>
+              {Platform.OS === 'web' ? (
+                <View style={styles.dateButton}>
+                  {/*
+                    On web, react-native-community/datetimepicker doesn't render,
+                    so we use a native <input type="date"> overlay. The input is
+                    visually invisible but covers the whole row so tapping anywhere
+                    opens the browser's date picker. The label underneath shows
+                    the friendly relative label.
+                  */}
+                  <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
+                    {dueDate ? relativeLabel(dueDate) : 'No due date'}
+                  </Text>
+                  {dueDate ? (
+                    <Pressable
+                      onPress={() => setDueDate(null)}
+                      hitSlop={8}
+                      style={styles.clearBtnWeb}
+                    >
+                      <Text style={styles.clearText}>Clear</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.dateHint}>Tap to set</Text>
+                  )}
+                  <input
+                    type="date"
+                    value={dueDate || ''}
+                    min="2000-01-01"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDueDate(val ? val : null);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'pointer',
+                      border: 'none',
+                      padding: 0,
+                      margin: 0,
+                      background: 'transparent',
+                    }}
+                  />
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => setShowPicker((v) => !v)}
+                    style={styles.dateButton}
+                  >
+                    <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
+                      {dueDate ? relativeLabel(dueDate) : 'No due date'}
+                    </Text>
+                    {dueDate ? (
+                      <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
+                        <Text style={styles.clearText}>Clear</Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.dateHint}>Tap to set</Text>
+                    )}
                   </Pressable>
-                ) : (
-                  <Text style={styles.dateHint}>Tap to set</Text>
-                )}
-              </Pressable>
-              {showPicker && (
-                <DateTimePicker
-                  value={dueDate ? fromISODate(dueDate) : new Date()}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                  onChange={onDateChange}
-                  minimumDate={new Date(2000, 0, 1)}
-                />
+                  {showPicker && (
+                    <DateTimePicker
+                      value={dueDate ? fromISODate(dueDate) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      onChange={onDateChange}
+                      minimumDate={new Date(2000, 0, 1)}
+                    />
+                  )}
+                </>
               )}
             </View>
           </ScrollView>
@@ -326,6 +376,116 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderColor: colors.border,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.md,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    clearBtnWeb: {
+      // Sit above the invisible <input> overlay on web so it remains tappable
+      position: 'relative',
+      zIndex: 2,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    dateText: {
+      fontSize: 16,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    dateTextMuted: {
+      color: colors.textFaint,
+    },
+    dateHint: {
+      fontSize: 13,
+      color: colors.textFaint,
+    },
+    clearText: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    footerRight: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    deleteBtn: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    deleteText: {
+      color: colors.danger,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    cancelBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+    },
+    cancelText: {
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    saveBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+    },
+    saveText: {
+      color: '#fff',
+      fontWeight: '700',
+    },
+  });
+dius: radius.pill,
+      borderWidth: 1,
+      maxWidth: 160,
+    },
+    chipText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    addSubjectChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderStyle: 'dashed',
+    },
+    addSubjectText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    dateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    clearBtnWeb: {
+      // Sit above the invisible <input> overlay on web so it remains tappable
+      position: 'relative',
+      zIndex: 2,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     dateText: {
       fontSize: 16,

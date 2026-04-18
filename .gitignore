@@ -36,4 +36,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# local dev helpers / Cowork artifacts
+.sync_poke
+start.ps1
+sanity_test.txt
+
 app-example

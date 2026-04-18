@@ -124,7 +124,7 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
                 value={draftName}
                 onChangeText={setDraftName}
                 onBlur={commitName}
-                placeholder="e.g. Jason"
+                placeholder="Enter your name"
                 placeholderTextColor={colors.textFaint}
                 style={styles.input}
                 returnKeyType="done"
@@ -354,3 +354,4 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
     },
   });
+ });
