@@ -48,6 +48,28 @@ export async function saveSubjects(subjects) {
   }
 }
 
+// --- User name ---
+
+const USER_NAME_KEY = '@simpleapp:userName:v1';
+
+export async function loadUserName() {
+  try {
+    const raw = await AsyncStorage.getItem(USER_NAME_KEY);
+    return raw ?? '';
+  } catch (e) {
+    console.warn('Failed to load user name:', e);
+    return '';
+  }
+}
+
+export async function saveUserName(name) {
+  try {
+    await AsyncStorage.setItem(USER_NAME_KEY, name);
+  } catch (e) {
+    console.warn('Failed to save user name:', e);
+  }
+}
+
 // --- Helpers ---
 
 export function newId() {

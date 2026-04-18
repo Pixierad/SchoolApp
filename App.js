@@ -17,6 +17,8 @@ import {
   saveTasks,
   loadSubjects,
   saveSubjects,
+  loadUserName,
+  saveUserName,
   newId,
 } from './src/storage';
 
@@ -48,6 +50,7 @@ function AppContent() {
 
   const [tasks, setTasks] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = useState('all');
@@ -59,9 +62,10 @@ function AppContent() {
   // Initial load
   useEffect(() => {
     (async () => {
-      const [t, s] = await Promise.all([loadTasks(), loadSubjects()]);
+      const [t, s, n] = await Promise.all([loadTasks(), loadSubjects(), loadUserName()]);
       setTasks(t);
       setSubjects(s);
+      setUserName(n);
       setLoading(false);
     })();
   }, []);
@@ -230,16 +234,16 @@ function AppContent() {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>{greeting()}</Text>
+          <Text style={styles.greeting}>{greeting(userName || 'Student')}</Text>
           <Text style={styles.headerTitle}>Your tasks</Text>
         </View>
         <Pressable
           onPress={() => setSettingsVisible(true)}
           style={styles.iconBtn}
           hitSlop={8}
-          accessibilityLabel="Appearance settings"
+          accessibilityLabel="Settings"
         >
-          <Text style={styles.iconBtnText}>{isDark ? '🌙' : '☀️'}</Text>
+          <Text style={styles.iconBtnText}>⚙️</Text>
         </Pressable>
         <Pressable
           onPress={() => setSubjectMgrVisible(true)}
@@ -317,6 +321,11 @@ function AppContent() {
       <SettingsSheet
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
+        userName={userName}
+        onNameChange={(name) => {
+          setUserName(name);
+          saveUserName(name);
+        }}
       />
     </SafeAreaView>
   );
@@ -346,13 +355,14 @@ function ProgressCard({ progress, styles }) {
 
 // --- Helpers ---
 
-function greeting() {
+function greeting(name) {
   const h = new Date().getHours();
-  if (h < 5) return 'Up late?';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  if (h < 22) return 'Good evening';
-  return 'Late night';
+  const suffix = name ? `, ${name}` : '';
+  if (h < 5) return name ? `Up late, ${name}?` : 'Up late?';
+  if (h < 12) return `Good morning${suffix}`;
+  if (h < 17) return `Good afternoon${suffix}`;
+  if (h < 22) return `Good evening${suffix}`;
+  return `Late night${suffix}`;
 }
 
 function emptyTitleFor(filter, total) {

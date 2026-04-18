@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   Modal,
   StyleSheet,
@@ -12,9 +13,9 @@ import {
 } from 'react-native';
 import { useTheme, ACCENTS, ACCENT_KEYS } from '../theme';
 
-// Settings bottom sheet: dark/light mode toggle + accent color picker.
-// Same swipe-to-dismiss behavior as SubjectManager.
-export default function SettingsSheet({ visible, onClose }) {
+// Settings bottom sheet: editable name, dark/light mode toggle, accent color
+// picker. Same swipe-to-dismiss behavior as SubjectManager.
+export default function SettingsSheet({ visible, onClose, userName = '', onNameChange }) {
   const {
     colors,
     spacing,
@@ -33,6 +34,25 @@ export default function SettingsSheet({ visible, onClose }) {
     [colors, spacing, radius, typography]
   );
 
+  // Local draft — synced from prop each time the sheet opens.
+  // Saved (via onNameChange) when the user taps Done or dismisses the sheet.
+  const [draftName, setDraftName] = useState(userName);
+
+  useEffect(() => {
+    if (visible) setDraftName(userName);
+  }, [visible, userName]);
+
+  const commitName = () => {
+    const trimmed = draftName.trim();
+    if (trimmed !== userName) onNameChange?.(trimmed);
+  };
+
+  const handleClose = () => {
+    commitName();
+    onClose();
+  };
+
+  // --- Swipe-to-dismiss ---
   const screenHeight = Dimensions.get('window').height;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -61,7 +81,10 @@ export default function SettingsSheet({ visible, onClose }) {
             toValue: screenHeight,
             duration: 200,
             useNativeDriver: true,
-          }).start(() => onClose());
+          }).start(() => {
+            commitName();
+            onClose();
+          });
         } else {
           Animated.spring(translateY, {
             toValue: 0,
@@ -76,23 +99,42 @@ export default function SettingsSheet({ visible, onClose }) {
   ).current;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.backdrop}>
-        <Pressable style={styles.backdropFill} onPress={onClose} />
+        <Pressable style={styles.backdropFill} onPress={handleClose} />
         <Animated.View
           style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
         >
           <View style={styles.dragZone} {...panResponder.panHandlers}>
             <View style={styles.handle} />
             <View style={styles.header}>
-              <Text style={styles.title}>Appearance</Text>
-              <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={styles.title}>Settings</Text>
+              <Pressable onPress={handleClose} hitSlop={8}>
                 <Text style={styles.doneText}>Done</Text>
               </Pressable>
             </View>
           </View>
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+            {/* Your name */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Your name</Text>
+              <TextInput
+                value={draftName}
+                onChangeText={setDraftName}
+                onBlur={commitName}
+                placeholder="e.g. Jason"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                returnKeyType="done"
+                autoCorrect={false}
+              />
+              <Text style={styles.hint}>
+                Shown in the greeting at the top of the home screen.
+              </Text>
+            </View>
+
             {/* Mode toggle */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Theme</Text>
@@ -191,7 +233,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.bg,
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
-      maxHeight: '75%',
+      maxHeight: '85%',
       paddingBottom: spacing.lg,
     },
     dragZone: {
@@ -238,6 +280,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     hint: {
       ...typography.bodyMuted,
       fontSize: 13,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      fontSize: 16,
+      color: colors.text,
     },
 
     // Segmented control (light/dark)
