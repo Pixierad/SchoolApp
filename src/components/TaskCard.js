@@ -5,9 +5,9 @@ import { resolveSubjectStyle } from '../utils/subjects';
 import { relativeLabel, dueStatus } from '../utils/dates';
 
 // A single task row: checkbox, title, subject badge, due date pill.
-// Tap the card to edit. Tap the checkbox to toggle done.
-// Once a task is done, a small delete button appears on the right as a
-// shortcut to clear it out without opening the edit sheet.
+// Tap the card bar to toggle done (check/uncheck).
+// When unchecked: an Edit button appears on the right to open the edit sheet.
+// When checked: a Delete button appears on the right as a quick-clear shortcut.
 //
 // On the home screen we deliberately show ONLY the subject name in the
 // badge — extras like room/teacher belong in the task detail sheet.
@@ -24,7 +24,7 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onToggle}
       style={({ pressed }) => [
         styles.card,
         shadow.card,
@@ -32,14 +32,10 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         pressed && styles.cardPressed,
       ]}
     >
-      {/* Checkbox */}
-      <Pressable
-        onPress={onToggle}
-        hitSlop={10}
-        style={[styles.checkbox, task.done && styles.checkboxDone]}
-      >
+      {/* Checkbox — visual only, tapping the whole card toggles */}
+      <View style={[styles.checkbox, task.done && styles.checkboxDone]}>
         {task.done && <Text style={styles.checkmark}>✓</Text>}
-      </Pressable>
+      </View>
 
       {/* Middle: title + meta */}
       <View style={styles.content}>
@@ -75,8 +71,26 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         </View>
       </View>
 
+      {/* Edit button — only for incomplete tasks.
+          Nested Pressable captures the tap so the outer card's onPress (toggle)
+          won't also fire. */}
+      {!task.done && onPress ? (
+        <Pressable
+          onPress={onPress}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.editBtn,
+            pressed && styles.editBtnPressed,
+          ]}
+          accessibilityLabel="Edit task"
+          accessibilityRole="button"
+        >
+          <Text style={styles.editBtnText}>✎</Text>
+        </Pressable>
+      ) : null}
+
       {/* Delete shortcut — only for completed tasks.
-          Nested Pressable captures the tap so the outer card's onPress (edit)
+          Nested Pressable captures the tap so the outer card's onPress (toggle)
           won't also fire. */}
       {task.done && onDelete ? (
         <Pressable
@@ -193,6 +207,25 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     dueText: {
       fontSize: 12,
       fontWeight: '600',
+    },
+    editBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+    },
+    editBtnPressed: {
+      opacity: 0.6,
+    },
+    editBtnText: {
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '500',
+      lineHeight: 22,
+      marginTop: -1,
     },
     deleteBtn: {
       width: 32,
