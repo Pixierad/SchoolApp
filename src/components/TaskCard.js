@@ -4,13 +4,6 @@ import { useTheme } from '../theme';
 import { resolveSubjectStyle } from '../utils/subjects';
 import { relativeLabel, dueStatus } from '../utils/dates';
 
-// A single task row: checkbox, title, subject badge, due date pill.
-// Tap the card bar to toggle done (check/uncheck).
-// When unchecked: an Edit button appears on the right to open the edit sheet.
-// When checked: a Delete button appears on the right as a quick-clear shortcut.
-//
-// On the home screen we deliberately show ONLY the subject name in the
-// badge — extras like room/teacher belong in the task detail sheet.
 export default function TaskCard({ task, subjects = [], onToggle, onPress, onDelete }) {
   const { colors, spacing, radius, typography, shadow, colorForSubject, isDark } = useTheme();
   const styles = useMemo(
@@ -32,12 +25,10 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         pressed && styles.cardPressed,
       ]}
     >
-      {/* Checkbox — visual only, tapping the whole card toggles */}
       <View style={[styles.checkbox, task.done && styles.checkboxDone]}>
         {task.done && <Text style={styles.checkmark}>✓</Text>}
       </View>
 
-      {/* Middle: title + meta */}
       <View style={styles.content}>
         <Text
           style={[styles.title, task.done && styles.titleDone]}
@@ -71,9 +62,6 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         </View>
       </View>
 
-      {/* Edit button — only for incomplete tasks.
-          Nested Pressable captures the tap so the outer card's onPress (toggle)
-          won't also fire. */}
       {!task.done && onPress ? (
         <Pressable
           onPress={onPress}
@@ -89,9 +77,6 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         </Pressable>
       ) : null}
 
-      {/* Delete shortcut — only for completed tasks.
-          Nested Pressable captures the tap so the outer card's onPress (toggle)
-          won't also fire. */}
       {task.done && onDelete ? (
         <Pressable
           onPress={onDelete}
@@ -244,7 +229,6 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 22,
       fontWeight: '500',
       lineHeight: 24,
-      // slight nudge so the × sits visually centered
       marginTop: -2,
     },
   });

@@ -18,8 +18,6 @@ import { useTheme } from '../theme';
 import { toISODate, fromISODate, relativeLabel } from '../utils/dates';
 import { findSubject, resolveSubjectStyle } from '../utils/subjects';
 
-// Modal that handles both creating and editing a task.
-// If `task` prop is present, we're editing; otherwise creating.
 export default function TaskForm({
   visible,
   task,
@@ -28,10 +26,6 @@ export default function TaskForm({
   onDelete,
   onCancel,
   onManageSubjects,
-  // Changes whenever the parent wants a *fresh* form (e.g. opening a new
-  // task or switching to edit a different task). Toggling `visible` alone
-  // no longer resets the draft — that way pop-overs like SubjectManager
-  // can temporarily hide the form without wiping what the user typed.
   resetKey,
 }) {
   const { colors, spacing, radius, typography, shadow, colorForSubject, isDark } = useTheme();
@@ -44,7 +38,7 @@ export default function TaskForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [subject, setSubject] = useState('');
-  const [dueDate, setDueDate] = useState(null); // ISO string or null
+  const [dueDate, setDueDate] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
 
   const screenHeight = Dimensions.get('window').height;
@@ -62,9 +56,6 @@ export default function TaskForm({
     }
   }, [visible, translateY, screenHeight]);
 
-  // Reset form only when the parent bumps resetKey, i.e. a fresh open.
-  // Re-mounting or flipping `visible` off/on (e.g. during a subject-manager
-  // detour) leaves the draft intact.
   useEffect(() => {
     setTitle(task?.title ?? '');
     setDescription(task?.description ?? '');
@@ -90,9 +81,6 @@ export default function TaskForm({
   };
 
   const handleDelete = () => {
-    // On web, Alert.alert with buttons doesn't fire onPress callbacks —
-    // it falls back to window.alert which ignores the buttons array. Use
-    // the browser's native confirm() for web.
     if (Platform.OS === 'web') {
       if (window.confirm('Delete task?\n\nThis cannot be undone.')) {
         onDelete?.();
@@ -106,7 +94,6 @@ export default function TaskForm({
   };
 
   const onDateChange = (event, selectedDate) => {
-    // Android closes the picker on any interaction; iOS keeps it open until done
     if (Platform.OS === 'android') setShowPicker(false);
     if (event?.type === 'dismissed') return;
     if (selectedDate) setDueDate(toISODate(selectedDate));
@@ -120,7 +107,6 @@ export default function TaskForm({
       >
         <Pressable style={styles.backdropFill} onPress={onCancel} />
         <Animated.View style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}>
-          {/* Handle */}
           <View style={styles.handle} />
 
           <ScrollView
@@ -131,7 +117,6 @@ export default function TaskForm({
               {isEditing ? 'Edit task' : 'New task'}
             </Text>
 
-            {/* Title input */}
             <View style={styles.field}>
               <Text style={styles.label}>Title</Text>
               <TextInput
@@ -145,7 +130,6 @@ export default function TaskForm({
               />
             </View>
 
-            {/* Description input */}
             <View style={styles.field}>
               <Text style={styles.label}>Description</Text>
               <TextInput
@@ -161,7 +145,6 @@ export default function TaskForm({
               />
             </View>
 
-            {/* Subject picker */}
             <View style={styles.field}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Subject</Text>
@@ -206,9 +189,6 @@ export default function TaskForm({
                 ) : null}
               </ScrollView>
 
-              {/* Selected subject details — only visible in the task detail
-                  sheet (not on the home page). Shows Room + Teacher next
-                  to the subject so you have context while editing. */}
               <SubjectDetails
                 name={subject}
                 subjects={subjects}
@@ -219,18 +199,10 @@ export default function TaskForm({
               />
             </View>
 
-            {/* Due date */}
             <View style={styles.field}>
               <Text style={styles.label}>Due date</Text>
               {Platform.OS === 'web' ? (
                 <View style={styles.dateButton}>
-                  {/*
-                    On web, react-native-community/datetimepicker doesn't render,
-                    so we use a native <input type="date"> overlay. The input is
-                    visually invisible but covers the whole row so tapping anywhere
-                    opens the browser's date picker. The label underneath shows
-                    the friendly relative label.
-                  */}
                   <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
                     {dueDate ? relativeLabel(dueDate) : 'No due date'}
                   </Text>
@@ -299,7 +271,6 @@ export default function TaskForm({
             </View>
           </ScrollView>
 
-          {/* Footer */}
           <View style={styles.footer}>
             {isEditing ? (
               <Pressable onPress={handleDelete} style={styles.deleteBtn} hitSlop={8}>
@@ -350,10 +321,6 @@ function SubjectChip({ label, name, active, onPress, subjects, styles, colors, c
   );
 }
 
-// Inline detail row under the subject chips. Shows the subject name
-// together with its Room and Teacher metadata. Only rendered when a
-// subject is selected and at least one detail is present (or always,
-// if you want it as a placeholder — currently only when something exists).
 function SubjectDetails({ name, subjects, styles, colors, colorForSubject, isDark }) {
   const subject = findSubject(name, subjects);
   if (!subject) return null;
@@ -542,7 +509,6 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       overflow: 'hidden',
     },
     clearBtnWeb: {
-      // Sit above the invisible <input> overlay on web so it remains tappable
       position: 'relative',
       zIndex: 2,
       paddingHorizontal: spacing.sm,

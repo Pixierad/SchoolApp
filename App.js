@@ -31,8 +31,6 @@ import SettingsSheet from './src/components/SettingsSheet';
 import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 
-// Outer App: just wires providers. All real logic lives in AppContent so
-// that it can call useTheme() from inside the ThemeProvider.
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -56,22 +54,14 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = useState('all');
-  const [editingTask, setEditingTask] = useState(null); // object or null
+  const [editingTask, setEditingTask] = useState(null);
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
 
-  // Bumped only when we want TaskForm to reset its internal draft (opening
-  // a brand-new task, or switching to edit a different task). Flipping
-  // formVisible alone does NOT reset — so a detour to SubjectManager and
-  // back preserves whatever the user had typed.
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
-  // Tracks whether we hid the form only to show SubjectManager (native
-  // only — on web the form stays mounted). When SubjectManager closes we
-  // re-open the form without bumping resetKey, restoring the draft.
   const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
 
-  // Initial load
   useEffect(() => {
     (async () => {
       const [t, s, n] = await Promise.all([loadTasks(), loadSubjects(), loadUserName()]);
@@ -82,7 +72,6 @@ function AppContent() {
     })();
   }, []);
 
-  // Persist whenever state changes (after initial load)
   useEffect(() => {
     if (!loading) saveTasks(tasks);
   }, [tasks, loading]);
@@ -90,8 +79,6 @@ function AppContent() {
   useEffect(() => {
     if (!loading) saveSubjects(subjects);
   }, [subjects, loading]);
-
-  // --- Derived data ---
 
   const counts = useMemo(() => {
     const today = todayISO();
@@ -128,7 +115,6 @@ function AppContent() {
           return true;
       }
     });
-    // Sort: not-done first, then by dueDate ascending (no date goes last), then by creation
     return matches.slice().sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
       if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
@@ -147,7 +133,6 @@ function AppContent() {
     return out;
   }, [tasks]);
 
-  // Progress summary for the header
   const progress = useMemo(() => {
     const doneCount = tasks.filter((t) => t.done).length;
     const total = tasks.length;
@@ -155,25 +140,21 @@ function AppContent() {
     return { doneCount, total, pct };
   }, [tasks]);
 
-  // --- Handlers ---
-
   const openNewTask = () => {
     setEditingTask(null);
-    setTaskFormResetKey((k) => k + 1); // fresh form
+    setTaskFormResetKey((k) => k + 1);
     setFormVisible(true);
   };
 
   const openEditTask = (task) => {
     setEditingTask(task);
-    setTaskFormResetKey((k) => k + 1); // load this task's values
+    setTaskFormResetKey((k) => k + 1);
     setFormVisible(true);
   };
 
   const closeForm = () => {
     setFormVisible(false);
     setEditingTask(null);
-    // If the user actually closed (saved / cancelled / deleted), don't
-    // auto-resume later from a SubjectManager detour.
     setResumeFormAfterSubjects(false);
   };
 
@@ -212,19 +193,12 @@ function AppContent() {
     );
   }, []);
 
-  // Quick-delete from the card itself (only exposed for completed tasks).
-  // No confirm: the task was already marked done, so this is a deliberate
-  // follow-up. Editing via the card still has a confirm-delete in the sheet.
   const quickDeleteTask = useCallback((id) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const updateSubjects = useCallback(
     (nextSubjects) => {
-      // Subjects are now objects { name, room, teacher, color }.
-      // Detect removed subjects by name and clear them from affected tasks.
-      // Detect renamed subjects (same index/identity but different name) and
-      // update task.subject references too.
       const prevByName = new Set(subjects.map((s) => s.name));
       const nextByName = new Set(nextSubjects.map((s) => s.name));
       const removedNames = [...prevByName].filter((n) => !nextByName.has(n));
@@ -240,8 +214,6 @@ function AppContent() {
     [subjects]
   );
 
-  // --- Render ---
-
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
@@ -254,7 +226,6 @@ function AppContent() {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting(userName || 'Student')}</Text>
@@ -278,13 +249,10 @@ function AppContent() {
         </Pressable>
       </View>
 
-      {/* Progress card */}
       <ProgressCard progress={progress} styles={styles} />
 
-      {/* Filter tabs */}
       <FilterTabs value={filter} onChange={setFilter} counts={counts} />
 
-      {/* Task list */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -309,10 +277,8 @@ function AppContent() {
         }
       />
 
-      {/* Floating add button — centered, grows while held */}
       <AddTaskFab onPress={openNewTask} styles={styles} shadow={shadow} />
 
-      {/* Modals */}
       <TaskForm
         visible={formVisible}
         task={editingTask}
@@ -322,14 +288,6 @@ function AppContent() {
         onDelete={handleDeleteTask}
         onCancel={closeForm}
         onManageSubjects={() => {
-          // Keep TaskForm mounted so the user's in-progress draft (title,
-          // subject selection, date) isn't wiped when they pop over to add
-          // a subject. On web, modals stack cleanly, so we just show the
-          // SubjectManager on top. On native, stacking two bottom-sheet
-          // modals can look janky, so we close the form first and flag it
-          // to be re-opened when SubjectManager closes. Because TaskForm
-          // now only resets on resetKey changes (not on visible flips),
-          // the draft is preserved across the detour.
           if (Platform.OS === 'web') {
             setSubjectMgrVisible(true);
           } else {
@@ -345,9 +303,6 @@ function AppContent() {
         onChange={updateSubjects}
         onClose={() => {
           setSubjectMgrVisible(false);
-          // On native, re-show the TaskForm if we hid it only to let the
-          // user pop into SubjectManager. resetKey is NOT bumped, so the
-          // user returns to whatever they had typed.
           if (resumeFormAfterSubjects) {
             setResumeFormAfterSubjects(false);
             setTimeout(() => setFormVisible(true), 250);
@@ -368,11 +323,6 @@ function AppContent() {
   );
 }
 
-// --- Subcomponents ---
-
-// Floating "add task" button. Anchored to the horizontal center of the
-// screen, it grows while the user holds it down. On release (or cancel)
-// it springs back. onPress still fires so a quick tap also opens the form.
 function AddTaskFab({ onPress, styles, shadow }) {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -415,9 +365,6 @@ function ProgressCard({ progress, styles }) {
   const { doneCount, total, pct } = progress;
   const { shadow } = useTheme();
 
-  // Tween the bar's width whenever pct changes.
-  // useNativeDriver MUST be false: the native driver can't animate layout
-  // properties like width — only transforms and opacity.
   const animatedPct = useRef(new Animated.Value(pct)).current;
   useEffect(() => {
     Animated.timing(animatedPct, {
@@ -427,8 +374,6 @@ function ProgressCard({ progress, styles }) {
     }).start();
   }, [pct, animatedPct]);
 
-  // Interpolate 0..100 → "0%".."100%" so the View's width is a percentage
-  // string (matches the parent track width regardless of screen size).
   const widthInterpolated = animatedPct.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
@@ -453,8 +398,6 @@ function ProgressCard({ progress, styles }) {
     </View>
   );
 }
-
-// --- Helpers ---
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -588,9 +531,6 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.primary,
       borderRadius: 3,
     },
-    // The FlatList itself needs flex:1 so it takes all remaining vertical
-    // space below the filters; otherwise it only sizes to its content and
-    // a gap can appear between filters and the list.
     list: {
       flex: 1,
     },
@@ -623,4 +563,3 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       lineHeight: 34,
     },
   });
-

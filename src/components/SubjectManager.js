@@ -18,9 +18,6 @@ import {
 import { useTheme } from '../theme';
 import { resolveSubjectStyle, SUBJECT_COLOR_PRESETS } from '../utils/subjects';
 
-// Modal to manage the user's list of subjects.
-// Subjects now have name + room + teacher + (optional) custom color.
-// Tap a subject row to edit. Tap "+ Add subject" to create a new one.
 export default function SubjectManager({
   visible,
   subjects,
@@ -34,16 +31,12 @@ export default function SubjectManager({
     [colors, spacing, radius, typography]
   );
 
-  // Editor state: when set, we render the editor sheet on top.
-  // editing.index === null means we're adding a brand-new subject.
   const [editing, setEditing] = useState(null);
 
-  // Reset editor whenever the manager opens fresh.
   useEffect(() => {
     if (visible) setEditing(null);
   }, [visible]);
 
-  // --- Swipe-to-dismiss gesture (same as before) ---
   const screenHeight = Dimensions.get('window').height;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -94,15 +87,12 @@ export default function SubjectManager({
     })
   ).current;
 
-  // --- Mutations ---
   const handleSaveSubject = (next) => {
-    // Validate name
     const name = (next.name || '').trim();
     if (!name) {
       Alert.alert('Missing name', 'Subject needs a name.');
       return;
     }
-    // Uniqueness check (case-insensitive). When editing, skip the row we're editing.
     const dup = subjects.some(
       (s, i) =>
         s.name.toLowerCase() === name.toLowerCase() &&
@@ -121,23 +111,8 @@ export default function SubjectManager({
     };
 
     if (editing && editing.index != null) {
-      // Edit in place.
-      const oldName = subjects[editing.index]?.name;
       const updated = subjects.map((s, i) => (i === editing.index ? cleaned : s));
       onChange(updated);
-      // If the user renamed the subject, propagate to the tasks too. The
-      // parent (App.js) handles deletion of removed names but doesn't know
-      // about renames — so we surface that intent here by passing a 2nd
-      // argument with the rename map.
-      if (oldName && oldName !== cleaned.name && typeof onChange === 'function') {
-        // Note: parent's onChange signature is (next), so we can't sneak in
-        // a 2nd arg cleanly. Instead, we trigger a follow-up via a custom
-        // event-like shape on the array: it won't work generally. Keep this
-        // simple by relying on App.js's removal logic — renamed subject
-        // appears as "removed old + added new", so old tasks lose the tag.
-        // For nicer UX we still emit a console message so we can revisit.
-        // (Tasks lose the tag, which is acceptable for v1 of this feature.)
-      }
     } else {
       onChange([...subjects, cleaned]);
     }
@@ -188,7 +163,6 @@ export default function SubjectManager({
             </View>
           </View>
 
-          {/* Add button */}
           <View style={styles.addRow}>
             <Pressable
               onPress={() => setEditing({ index: null, draft: blankSubject() })}
@@ -198,7 +172,6 @@ export default function SubjectManager({
             </Pressable>
           </View>
 
-          {/* List */}
           {subjects.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
@@ -247,7 +220,6 @@ export default function SubjectManager({
           )}
         </Animated.View>
 
-        {/* Editor (overlay) */}
         <SubjectEditor
           visible={!!editing}
           isNew={editing?.index == null}
@@ -272,8 +244,6 @@ function formatRowMeta(subject, count) {
   return parts.join(' · ');
 }
 
-// --- Subject editor ---
-// Shown on top of the manager when adding or editing a subject.
 function SubjectEditor({ visible, isNew, initial, onCancel, onSave }) {
   const { colors, spacing, radius, typography, shadow } = useTheme();
   const styles = useMemo(
@@ -517,8 +487,6 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
       lineHeight: 22,
     },
-
-    // Editor
     editorBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
