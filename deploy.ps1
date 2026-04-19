@@ -26,14 +26,29 @@ git push
 Write-Host "[4/5] Building web bundle..." -ForegroundColor Cyan
 
 # Bake the current commit into the bundle so the app can show its live version.
+# Expo's dotenv loader only inlines vars it finds in .env* files -- shell-set
+# env vars get ignored. So we write them to .env.production.local just for the
+# build, then delete the file so they never hang around. The file pattern
+# .env*.local is gitignored, so this never leaks.
 $gitShort = (& git rev-parse --short HEAD 2>$null)
+$envFile = ".\.env.production.local"
 if ($gitShort) {
-    $env:EXPO_PUBLIC_APP_VERSION = $gitShort.Trim()
-    $env:EXPO_PUBLIC_APP_BUILT = Get-Date -Format "yyyy-MM-dd HH:mm"
-    Write-Host "    Baked version: $($env:EXPO_PUBLIC_APP_VERSION) ($($env:EXPO_PUBLIC_APP_BUILT))" -ForegroundColor DarkGray
+    $ver = $gitShort.Trim()
+    $built = Get-Date -Format "yyyy-MM-dd HH:mm"
+    @(
+        "EXPO_PUBLIC_APP_VERSION=$ver"
+        "EXPO_PUBLIC_APP_BUILT=$built"
+    ) | Set-Content -Path $envFile -Encoding utf8
+    Write-Host "    Baked version: $ver ($built)" -ForegroundColor DarkGray
 }
 
-npx expo export --platform web
+try {
+    # --clear wipes Metro's transform cache so changes to env vars actually
+    # produce a new bundle (otherwise Metro reuses the cached one).
+    npx expo export --platform web --clear
+} finally {
+    if (Test-Path $envFile) { Remove-Item $envFile -Force }
+}
 
 Write-Host "[5/5] Deploying to Vercel..." -ForegroundColor Cyan
 
