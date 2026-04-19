@@ -1,19 +1,18 @@
-// Email OTP sign-in / sign-up screen.
+// Auth screen with two selectable methods: email+password or email OTP.
 //
-// Two-step flow:
-//   1. User enters their email and we call supabase.auth.signInWithOtp().
-//      Supabase emails them a 6-digit code (the `{{ .Token }}` in the
-//      "Magic Link" / "Confirm signup" email templates).
-//   2. User enters the code and we call supabase.auth.verifyOtp() with
-//      type: 'email'. On success the auth listener in App.js takes over.
+// The user picks the method with a toggle at the bottom of the card.
 //
-// `shouldCreateUser: true` means the same flow handles both sign-in and
-// sign-up -- if the email isn't on file yet, Supabase creates the user
-// automatically when the OTP is verified.
+//   Password mode:
+//     signInWithPassword for existing users, signUp for new ones. A
+//     sub-toggle switches between sign-in and sign-up.
 //
+//   OTP mode (two steps):
+//     1. signInWithOtp({ email, shouldCreateUser: true }) -- Supabase
+//        emails a 6-digit code ({{ .Token }} in the email template).
+//     2. verifyOtp({ email, token, type: 'email' }) -- logs the user in.
+//
+// On success the onAuthStateChange listener in App.js takes over.
 // Shown whenever Supabase is configured but no session is present.
-// If Supabase isn't configured (missing env vars) App.js skips this
-// screen entirely and goes straight into local-only mode.
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
@@ -39,9 +38,14 @@ export default function AuthScreen() {
     [colors, spacing, radius, typography]
   );
 
-  const [step, setStep] = useState('email'); // 'email' | 'code'
+  const [authMethod, setAuthMethod] = useState('password'); // 'password' | 'otp'
+  const [pwMode, setPwMode] = useState('signin');           // 'signin'  | 'signup'
+  const [otpStep, setOtpStep] = useState('email');          // 'email'   | 'code'
+
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
@@ -58,11 +62,66 @@ export default function AuthScreen() {
     return () => clearInterval(id);
   }, [resendIn]);
 
-  const isValidEmail = (v) => /^\S+@\S+\.\S+$/.test(v.trim());
   const trimmedEmail = email.trim();
+  const isValidEmail = (v) => /^\S+@\S+\.\S+$/.test(v.trim());
+  const isSignIn = pwMode === 'signin';
 
-  const canSendEmail = isValidEmail(trimmedEmail) && !busy;
-  const canVerify = code.replace(/\s/g, '').length >= 6 && !busy;
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const clearMessages = () => {
+    setError(null);
+    setInfo(null);
+  };
+
+  const switchAuthMethod = () => {
+    clearMessages();
+    setBusy(false);
+    setCode('');
+    setPassword('');
+    setOtpStep('email');
+    setResendIn(0);
+    setAuthMethod((m) => (m === 'password' ? 'otp' : 'password'));
+  };
+
+  // ── Password flow ────────────────────────────────────────────────────────
+  const canSubmitPassword =
+    isValidEmail(trimmedEmail) && password.length >= 6 && !busy;
+
+  const submitPassword = async () => {
+    if (!canSubmitPassword || !supabase) return;
+    setBusy(true);
+    clearMessages();
+    try {
+      if (isSignIn) {
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+        if (err) throw err;
+        // Success -- App.js auth listener takes over.
+      } else {
+        const { data, error: err } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+        });
+        if (err) throw err;
+        // If email confirmation is required, Supabase returns a user but
+        // no session. Tell the user to go confirm the email.
+        if (!data?.session) {
+          setInfo('Check your email for a confirmation link, then sign in.');
+          setPwMode('signin');
+          setPassword('');
+        }
+      }
+    } catch (e) {
+      setError(e?.message || 'Something went wrong. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── OTP flow ─────────────────────────────────────────────────────────────
+  const canSendOtp = isValidEmail(trimmedEmail) && !busy;
+  const canVerifyOtp = code.replace(/\s/g, '').length >= 6 && !busy;
 
   const sendOtp = async ({ silent = false } = {}) => {
     if (!supabase) return;
@@ -79,10 +138,9 @@ export default function AuthScreen() {
         options: { shouldCreateUser: true },
       });
       if (err) throw err;
-      setStep('code');
+      setOtpStep('code');
       setInfo(`We sent a 6-digit code to ${trimmedEmail}.`);
       setResendIn(RESEND_COOLDOWN_SECONDS);
-      // Focus the code field so the user can start typing immediately.
       setTimeout(() => codeInputRef.current?.focus?.(), 100);
     } catch (e) {
       setError(e?.message || 'Could not send the code. Try again.');
@@ -92,10 +150,9 @@ export default function AuthScreen() {
   };
 
   const verifyOtp = async () => {
-    if (!supabase || !canVerify) return;
+    if (!supabase || !canVerifyOtp) return;
     setBusy(true);
-    setError(null);
-    setInfo(null);
+    clearMessages();
     try {
       const cleaned = code.replace(/\s/g, '');
       const { error: err } = await supabase.auth.verifyOtp({
@@ -104,7 +161,7 @@ export default function AuthScreen() {
         type: 'email',
       });
       if (err) throw err;
-      // Success -- App.js auth listener takes over from here.
+      // Success -- App.js auth listener takes over.
     } catch (e) {
       setError(e?.message || 'That code didn’t work. Try again.');
     } finally {
@@ -113,12 +170,33 @@ export default function AuthScreen() {
   };
 
   const useDifferentEmail = () => {
-    setStep('email');
+    setOtpStep('email');
     setCode('');
-    setError(null);
-    setInfo(null);
     setResendIn(0);
+    clearMessages();
   };
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  const title =
+    authMethod === 'otp'
+      ? otpStep === 'email'
+        ? 'Sign in with email'
+        : 'Enter your code'
+      : isSignIn
+      ? 'Welcome back'
+      : 'Create your account';
+
+  const subtitle =
+    authMethod === 'otp'
+      ? otpStep === 'email'
+        ? 'We’ll email you a 6-digit code — no password needed.'
+        : `Check ${trimmedEmail || 'your inbox'} for the 6-digit code.`
+      : isSignIn
+      ? 'Sign in to sync your tasks across devices.'
+      : 'Sign up to back up your tasks to the cloud.';
+
+  const toggleLabel =
+    authMethod === 'password' ? 'Use one-time code instead' : 'Use password instead';
 
   return (
     <KeyboardAvoidingView
@@ -131,16 +209,11 @@ export default function AuthScreen() {
       >
         <View style={[styles.card, shadow.card]}>
           <Text style={styles.brand}>SchoolApp</Text>
-          <Text style={styles.title}>
-            {step === 'email' ? 'Sign in with email' : 'Enter your code'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {step === 'email'
-              ? 'We’ll email you a 6-digit code — no password needed.'
-              : `Check ${trimmedEmail || 'your inbox'} for the 6-digit code.`}
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
-          {step === 'email' ? (
+          {/* Email field -- always shown except when OTP is on step 'code' */}
+          {!(authMethod === 'otp' && otpStep === 'code') && (
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -155,11 +228,38 @@ export default function AuthScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 editable={!busy}
-                onSubmitEditing={() => canSendEmail && sendOtp()}
-                returnKeyType="send"
+                onSubmitEditing={() => {
+                  if (authMethod === 'password') submitPassword();
+                  else if (canSendOtp) sendOtp();
+                }}
+                returnKeyType={authMethod === 'password' ? 'next' : 'send'}
               />
             </View>
-          ) : (
+          )}
+
+          {/* Password field */}
+          {authMethod === 'password' && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="At least 6 characters"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={isSignIn ? 'current-password' : 'new-password'}
+                textContentType={isSignIn ? 'password' : 'newPassword'}
+                editable={!busy}
+                onSubmitEditing={submitPassword}
+              />
+            </View>
+          )}
+
+          {/* OTP code field */}
+          {authMethod === 'otp' && otpStep === 'code' && (
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>6-digit code</Text>
               <TextInput
@@ -192,11 +292,26 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          {step === 'email' ? (
+          {/* Primary action */}
+          {authMethod === 'password' ? (
+            <Pressable
+              onPress={submitPassword}
+              disabled={!canSubmitPassword}
+              style={[styles.primaryBtn, !canSubmitPassword && { opacity: 0.5 }]}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>
+                  {isSignIn ? 'Sign in' : 'Sign up'}
+                </Text>
+              )}
+            </Pressable>
+          ) : otpStep === 'email' ? (
             <Pressable
               onPress={() => sendOtp()}
-              disabled={!canSendEmail}
-              style={[styles.primaryBtn, !canSendEmail && { opacity: 0.5 }]}
+              disabled={!canSendOtp}
+              style={[styles.primaryBtn, !canSendOtp && { opacity: 0.5 }]}
             >
               {busy ? (
                 <ActivityIndicator color="#fff" />
@@ -205,19 +320,38 @@ export default function AuthScreen() {
               )}
             </Pressable>
           ) : (
-            <>
-              <Pressable
-                onPress={verifyOtp}
-                disabled={!canVerify}
-                style={[styles.primaryBtn, !canVerify && { opacity: 0.5 }]}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Verify and sign in</Text>
-                )}
-              </Pressable>
+            <Pressable
+              onPress={verifyOtp}
+              disabled={!canVerifyOtp}
+              style={[styles.primaryBtn, !canVerifyOtp && { opacity: 0.5 }]}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Verify and sign in</Text>
+              )}
+            </Pressable>
+          )}
 
+          {/* Method-specific secondary link(s) */}
+          {authMethod === 'password' ? (
+            <Pressable
+              onPress={() => {
+                setPwMode(isSignIn ? 'signup' : 'signin');
+                clearMessages();
+              }}
+              hitSlop={8}
+              disabled={busy}
+              style={styles.switchLink}
+            >
+              <Text style={styles.switchText}>
+                {isSignIn
+                  ? 'New here? Create an account'
+                  : 'Already have an account? Sign in'}
+              </Text>
+            </Pressable>
+          ) : otpStep === 'code' ? (
+            <>
               <Pressable
                 onPress={() => sendOtp({ silent: true })}
                 disabled={busy || resendIn > 0}
@@ -230,12 +364,9 @@ export default function AuthScreen() {
                     (busy || resendIn > 0) && { opacity: 0.5 },
                   ]}
                 >
-                  {resendIn > 0
-                    ? `Resend code in ${resendIn}s`
-                    : 'Resend code'}
+                  {resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
                 </Text>
               </Pressable>
-
               <Pressable
                 onPress={useDifferentEmail}
                 disabled={busy}
@@ -245,7 +376,20 @@ export default function AuthScreen() {
                 <Text style={styles.switchText}>Use a different email</Text>
               </Pressable>
             </>
-          )}
+          ) : null}
+
+          {/* Divider + method toggle */}
+          <View style={styles.divider} />
+          <Pressable
+            onPress={switchAuthMethod}
+            hitSlop={8}
+            disabled={busy}
+            style={styles.methodToggle}
+          >
+            <Text style={[styles.methodToggleText, busy && { opacity: 0.5 }]}>
+              {toggleLabel}
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -350,6 +494,20 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     switchText: {
       color: colors.primary,
       fontSize: 14,
+      fontWeight: '600',
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: spacing.xs,
+    },
+    methodToggle: {
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+    },
+    methodToggleText: {
+      color: colors.textMuted,
+      fontSize: 13,
       fontWeight: '600',
     },
   });
