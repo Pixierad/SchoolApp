@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "dev": "REACT_NATIVE_PACKAGER_HOSTNAME=100.84.160.90 expo start",
-    "deploy": "expo export --platform web && vercel dist --prod"
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
