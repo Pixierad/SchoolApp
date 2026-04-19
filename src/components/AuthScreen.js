@@ -116,7 +116,7 @@ export default function AuthScreen() {
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="At least 6 characters"
+              placeholder="Enter your password"
               placeholderTextColor={colors.textFaint}
               style={styles.input}
               secureTextEntry
