@@ -28,24 +28,17 @@ npx expo export --platform web
 
 Write-Host "[5/5] Deploying to Vercel..." -ForegroundColor Cyan
 
-# One-time link: if .vercel\project.json doesn't exist yet, link the project
-# non-interactively with sensible defaults. After this, subsequent runs skip
-# every prompt.
+# Force dist/ to deploy to the schoolapp project, not auto-link to a new "dist" project.
 if (-not (Test-Path ".\.vercel\project.json")) {
-    Write-Host "    First deploy detected - linking project..." -ForegroundColor Yellow
-    # --yes accepts defaults for scope + project name (uses current folder name).
-    npx vercel link --yes
+    Write-Host "    Missing .\.vercel\project.json - run 'vercel link' once first." -ForegroundColor Yellow
+    exit 1
 }
+New-Item -ItemType Directory -Force -Path ".\dist\.vercel" | Out-Null
+Copy-Item ".\.vercel\project.json" ".\dist\.vercel\project.json" -Force
 
-# --yes     : auto-answer every prompt with its default
-# --prod    : push straight to production (skip preview URL prompt)
-# dist      : the folder expo just built
-# --token   : read from $env:VERCEL_TOKEN (never hardcode the token in this
-#             file - it gets committed to git and GitHub will block the push)
 if ($env:VERCEL_TOKEN) {
     npx vercel deploy dist --prod --yes --token $env:VERCEL_TOKEN
 } else {
-    # No token in env - fall back to whatever session `vercel login` established.
     npx vercel deploy dist --prod --yes
 }
 
