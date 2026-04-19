@@ -12,6 +12,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../theme';
@@ -55,6 +56,45 @@ export default function TaskForm({
       }).start();
     }
   }, [visible, translateY, screenHeight]);
+
+  // Swipe-down-to-dismiss. Only the drag zone (handle + title area) responds,
+  // so the ScrollView below it still scrolls normally.
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 3 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onMoveShouldSetPanResponderCapture: (_, gs) =>
+        gs.dy > 3 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderGrant: () => {
+        translateY.stopAnimation();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dismissed = gs.dy > 100 || gs.vy > 0.5;
+        if (dismissed) {
+          Animated.timing(translateY, {
+            toValue: screenHeight,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            onCancel?.();
+          });
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
+        }
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    })
+  ).current;
 
   useEffect(() => {
     setTitle(task?.title ?? '');
@@ -107,7 +147,9 @@ export default function TaskForm({
       >
         <Pressable style={styles.backdropFill} onPress={onCancel} />
         <Animated.View style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}>
-          <View style={styles.handle} />
+          <View style={styles.dragZone} {...panResponder.panHandlers}>
+            <View style={styles.handle} />
+          </View>
 
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -379,8 +421,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       maxHeight: '90%',
       paddingBottom: spacing.lg,
     },
+    dragZone: {
+      // Big hit area at the top of the sheet for swipe-down-to-dismiss.
+      paddingVertical: spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     handle: {
-      alignSelf: 'center',
       width: 40,
       height: 4,
       borderRadius: 2,

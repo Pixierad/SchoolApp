@@ -33,7 +33,14 @@ const CUSTOM_COLOR_OPTIONS = [
 ];
 
 // Settings bottom sheet: editable name + theme gallery + custom theme builder.
-export default function SettingsSheet({ visible, onClose, userName = '', onNameChange }) {
+export default function SettingsSheet({
+  visible,
+  onClose,
+  userName = '',
+  onNameChange,
+  session = null,
+  onSignOut,
+}) {
   const {
     colors,
     spacing,
@@ -210,6 +217,44 @@ export default function SettingsSheet({ visible, onClose, userName = '', onNameC
                 Long-press a custom theme to delete it.
               </Text>
             </View>
+
+            {/* Account (only shown when signed in via Supabase) */}
+            {session ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Account</Text>
+                <View style={styles.accountRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.accountEmail} numberOfLines={1}>
+                      {session?.user?.email || 'Signed in'}
+                    </Text>
+                    <Text style={styles.hint}>
+                      Your tasks sync to the cloud while you're signed in.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      if (window.confirm('Sign out of this account?')) {
+                        onSignOut?.();
+                      }
+                      return;
+                    }
+                    Alert.alert(
+                      'Sign out?',
+                      'You can sign back in any time.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Sign out', style: 'destructive', onPress: () => onSignOut?.() },
+                      ]
+                    );
+                  }}
+                  style={styles.signOutBtn}
+                >
+                  <Text style={styles.signOutText}>Sign out</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </ScrollView>
 
           {/* Custom theme builder (inline modal on top) */}
@@ -728,6 +773,33 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     saveText: {
       color: '#fff',
+      fontWeight: '700',
+    },
+
+    // Account section
+    accountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardMuted,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    accountEmail: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    signOutBtn: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.dangerSoft,
+      marginTop: spacing.sm,
+    },
+    signOutText: {
+      color: colors.danger,
       fontWeight: '700',
     },
   });

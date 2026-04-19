@@ -23,6 +23,7 @@ import {
   saveUserName,
   newId,
 } from './src/storage';
+import { supabase, isSupabaseConfigured } from './src/supabase';
 
 import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
@@ -30,6 +31,7 @@ import SubjectManager from './src/components/SubjectManager';
 import SettingsSheet from './src/components/SettingsSheet';
 import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
+import AuthScreen from './src/components/AuthScreen';
 
 export default function App() {
   return (
@@ -53,6 +55,12 @@ function AppContent() {
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Auth state. `session === undefined` means we haven't checked yet;
+  // `null` means signed out; any object means signed in.
+  // When Supabase isn't configured we treat everyone as "local user" --
+  // session stays null but we render the app anyway.
+  const [session, setSession] = useState(isSupabaseConfigured ? undefined : null);
+
   const [filter, setFilter] = useState('all');
   const [editingTask, setEditingTask] = useState(null);
   const [formVisible, setFormVisible] = useState(false);
@@ -62,15 +70,49 @@ function AppContent() {
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
   const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
 
+  // Wire up Supabase auth listener (no-op in local-only mode).
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setSession(data?.session ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+    });
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  // Load user data whenever the active identity changes (sign in / sign out /
+  // first boot in local mode). Re-keying on session.user?.id guarantees a
+  // fresh load for the new user.
+  const sessionUserId = session?.user?.id ?? null;
+  useEffect(() => {
+    // Skip while we're still determining the initial session.
+    if (session === undefined) return;
+    // If Supabase is configured but there's no session, don't load anything yet
+    // -- the AuthScreen is showing.
+    if (isSupabaseConfigured && !session) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
     (async () => {
       const [t, s, n] = await Promise.all([loadTasks(), loadSubjects(), loadUserName()]);
+      if (cancelled) return;
       setTasks(t);
       setSubjects(s);
       setUserName(n);
       setLoading(false);
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [session, sessionUserId]);
 
   useEffect(() => {
     if (!loading) saveTasks(tasks);
@@ -214,6 +256,26 @@ function AppContent() {
     [subjects]
   );
 
+  // Still determining the initial Supabase session.
+  if (session === undefined) {
+    return (
+      <SafeAreaView style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  // Supabase configured but signed out -> sign-in screen.
+  if (isSupabaseConfigured && !session) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <AuthScreen />
+        <VersionBadge styles={styles} />
+      </SafeAreaView>
+    );
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
@@ -317,6 +379,21 @@ function AppContent() {
         onNameChange={(name) => {
           setUserName(name);
           saveUserName(name);
+        }}
+        session={session}
+        onSignOut={async () => {
+          if (supabase) {
+            try {
+              await supabase.auth.signOut();
+            } catch (e) {
+              console.warn('Sign out failed:', e?.message);
+            }
+          }
+          // Clear in-memory state so no previous-user data lingers on screen.
+          setTasks([]);
+          setSubjects([]);
+          setUserName('');
+          setSettingsVisible(false);
         }}
       />
 
