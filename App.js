@@ -319,7 +319,21 @@ function AppContent() {
           saveUserName(name);
         }}
       />
+
+      <VersionBadge styles={styles} />
     </SafeAreaView>
+  );
+}
+
+function VersionBadge({ styles }) {
+  const sha = process.env.EXPO_PUBLIC_APP_VERSION || 'dev';
+  const built = process.env.EXPO_PUBLIC_APP_BUILT || '';
+  return (
+    <View style={styles.versionBadge} pointerEvents="none">
+      <Text style={styles.versionText}>
+        {`v ${sha}${built ? ' \u00b7 ' + built : ''}`}
+      </Text>
+    </View>
   );
 }
 
@@ -561,5 +575,20 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 32,
       fontWeight: '300',
       lineHeight: 34,
+    },
+    versionBadge: {
+      position: 'absolute',
+      left: spacing.md,
+      bottom: spacing.md,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: radius.sm,
+      backgroundColor: colors.cardMuted,
+      opacity: 0.7,
+    },
+    versionText: {
+      fontSize: 10,
+      color: colors.textMuted,
+      fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     },
   });

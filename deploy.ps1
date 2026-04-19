@@ -24,6 +24,16 @@ Write-Host "[3/5] Pushing to GitHub..." -ForegroundColor Cyan
 git push
 
 Write-Host "[4/5] Building web bundle..." -ForegroundColor Cyan
+
+# Bake the current commit into the bundle so the app can show its live version.
+$gitShort = (& git rev-parse --short HEAD 2>$null)
+if ($gitShort) {
+    $env:EXPO_PUBLIC_APP_VERSION = $gitShort.Trim()
+    $gitDate = (& git log -1 --format=%cs 2>$null)
+    if ($gitDate) { $env:EXPO_PUBLIC_APP_BUILT = $gitDate.Trim() }
+    Write-Host "    Baked version: $($env:EXPO_PUBLIC_APP_VERSION) ($($env:EXPO_PUBLIC_APP_BUILT))" -ForegroundColor DarkGray
+}
+
 npx expo export --platform web
 
 Write-Host "[5/5] Deploying to Vercel..." -ForegroundColor Cyan
