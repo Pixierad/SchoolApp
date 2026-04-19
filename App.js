@@ -331,7 +331,7 @@ function VersionBadge({ styles }) {
   return (
     <View style={styles.versionBadge} pointerEvents="none">
       <Text style={styles.versionText}>
-        {`v ${sha}${built ? ' \u00b7 ' + built : ''}`}
+        {`Ver.${sha}${built ? ' \u00b7 ' + built : ''}`}
       </Text>
     </View>
   );

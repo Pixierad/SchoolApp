@@ -29,8 +29,7 @@ Write-Host "[4/5] Building web bundle..." -ForegroundColor Cyan
 $gitShort = (& git rev-parse --short HEAD 2>$null)
 if ($gitShort) {
     $env:EXPO_PUBLIC_APP_VERSION = $gitShort.Trim()
-    $gitDate = (& git log -1 --format=%cs 2>$null)
-    if ($gitDate) { $env:EXPO_PUBLIC_APP_BUILT = $gitDate.Trim() }
+    $env:EXPO_PUBLIC_APP_BUILT = Get-Date -Format "yyyy-MM-dd HH:mm"
     Write-Host "    Baked version: $($env:EXPO_PUBLIC_APP_VERSION) ($($env:EXPO_PUBLIC_APP_BUILT))" -ForegroundColor DarkGray
 }
 
