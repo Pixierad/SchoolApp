@@ -31,6 +31,15 @@ import { supabase } from '../supabase';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
+// Toggle this to re-enable the "check your email" confirmation flow on sign-up.
+// When false, after signUp we immediately try signInWithPassword so new users
+// land straight in the app. When true, we show the original info message and
+// flip the form back to sign-in mode.
+// NOTE: this only controls the client-side UX. To fully disable email
+// confirmation you also need to turn off "Confirm email" in the Supabase
+// dashboard (Auth → Providers → Email).
+const REQUIRE_EMAIL_CONFIRMATION = false;
+
 export default function AuthScreen() {
   const { colors, spacing, radius, typography, shadow } = useTheme();
   const styles = useMemo(
@@ -107,9 +116,19 @@ export default function AuthScreen() {
         // If email confirmation is required, Supabase returns a user but
         // no session. Tell the user to go confirm the email.
         if (!data?.session) {
-          setInfo('Check your email for a confirmation link, then sign in.');
-          setPwMode('signin');
-          setPassword('');
+          if (REQUIRE_EMAIL_CONFIRMATION) {
+            setInfo('Check your email for a confirmation link, then sign in.');
+            setPwMode('signin');
+            setPassword('');
+          } else {
+            // Email confirmation is disabled — try to sign the user in
+            // immediately so they don't have to do anything else.
+            const { error: signInErr } = await supabase.auth.signInWithPassword({
+              email: trimmedEmail,
+              password,
+            });
+            if (signInErr) throw signInErr;
+          }
         }
       }
     } catch (e) {
