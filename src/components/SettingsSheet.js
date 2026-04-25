@@ -40,6 +40,7 @@ export default function SettingsSheet({
   onNameChange,
   session = null,
   onSignOut,
+  onShowChangelog,
 }) {
   const {
     colors,
@@ -83,7 +84,21 @@ export default function SettingsSheet({
 
   // --- Swipe-to-dismiss ---
   const screenHeight = Dimensions.get('window').height;
-  const translateY = useRef(new Animated.Value(0)).current;
+  // Lazy-init avoids re-allocating Animated.Value on every render.
+  const translateYRef = useRef(null);
+  if (translateYRef.current == null) translateYRef.current = new Animated.Value(0);
+  const translateY = translateYRef.current;
+
+  // Track mount state -- the dismiss animation has a 200ms continuation
+  // and we don't want it to fire commitName/onClose against an unmounted
+  // tree.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -119,6 +134,7 @@ export default function SettingsSheet({
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
+            if (!mountedRef.current) return;
             commitName();
             onClose();
           });
@@ -217,6 +233,25 @@ export default function SettingsSheet({
                 Long-press a custom theme to delete it.
               </Text>
             </View>
+
+            {/* What's new */}
+            {onShowChangelog ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>About</Text>
+                <Pressable
+                  onPress={() => onShowChangelog?.()}
+                  style={styles.changelogRow}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show what's new"
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.changelogTitle}>What's new</Text>
+                    <Text style={styles.hint}>Recent updates and improvements.</Text>
+                  </View>
+                  <Text style={styles.changelogChevron}>›</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {/* Account (only shown when signed in via Supabase) */}
             {session ? (
@@ -320,7 +355,12 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
   const [primary, setPrimary] = useState('#5B6CFF');
 
   const builderScreenHeight = Dimensions.get('window').height;
-  const builderTranslateY = useRef(new Animated.Value(builderScreenHeight)).current;
+  // Lazy-init Animated.Value so re-renders don't churn it.
+  const builderTranslateYRef = useRef(null);
+  if (builderTranslateYRef.current == null) {
+    builderTranslateYRef.current = new Animated.Value(builderScreenHeight);
+  }
+  const builderTranslateY = builderTranslateYRef.current;
 
   useEffect(() => {
     if (visible) {
@@ -801,5 +841,26 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     signOutText: {
       color: colors.danger,
       fontWeight: '700',
+    },
+
+    // What's-new row
+    changelogRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardMuted,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
+    changelogTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    changelogChevron: {
+      color: colors.textMuted,
+      fontSize: 22,
+      lineHeight: 22,
     },
   });

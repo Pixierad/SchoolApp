@@ -1,5 +1,13 @@
 // Small date helpers used across the app.
 // Tasks store dueDate as an ISO date string "YYYY-MM-DD" (no time — day-level granularity).
+//
+// The "soon" / "in N days" thresholds below are deliberately aligned at one
+// week (7 days). Previously dueStatus treated diffs <= 3 as 'soon' while
+// relativeLabel emitted "In N days" up to 6, which produced inconsistent UI
+// (a task due in 5 days read "In 5 days" but rendered with the neutral
+// 'future' colour). Both helpers now use the same UPCOMING_WINDOW_DAYS.
+
+export const UPCOMING_WINDOW_DAYS = 7;
 
 export function toISODate(date) {
   if (!date) return null;
@@ -35,8 +43,8 @@ export function relativeLabel(iso) {
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
   if (diff === -1) return 'Yesterday';
-  if (diff > 1 && diff <= 6) return `In ${diff} days`;
-  if (diff < -1 && diff >= -6) return `${Math.abs(diff)} days ago`;
+  if (diff > 1 && diff <= UPCOMING_WINDOW_DAYS) return `In ${diff} days`;
+  if (diff < -1 && diff >= -UPCOMING_WINDOW_DAYS) return `${Math.abs(diff)} days ago`;
 
   const d = fromISODate(iso);
   const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
@@ -44,13 +52,14 @@ export function relativeLabel(iso) {
   return `${weekday}, ${month} ${d.getDate()}`;
 }
 
-// Status for coloring the due-date pill
+// Status for coloring the due-date pill. The 'soon' threshold matches
+// relativeLabel's "In N days" range so colour and copy stay in lockstep.
 export function dueStatus(iso, done) {
   if (done) return 'done';
   if (!iso) return 'none';
   const diff = daysBetween(todayISO(), iso);
   if (diff < 0) return 'overdue';
   if (diff === 0) return 'today';
-  if (diff <= 3) return 'soon';
+  if (diff <= UPCOMING_WINDOW_DAYS) return 'soon';
   return 'future';
 }

@@ -72,8 +72,16 @@ export default function AuthScreen() {
   }, [resendIn]);
 
   const trimmedEmail = email.trim();
-  const isValidEmail = (v) => /^\S+@\S+\.\S+$/.test(v.trim());
+  // Slightly tighter than `/^\S+@\S+\.\S+$/`: rejects "a@b.c" (TLD must be
+  // ≥ 2 chars) and explicitly disallows '@' inside the local/domain parts.
+  // Still permissive enough that we don't reject real-but-unusual addresses
+  // -- final validity is always determined by the server.
+  const isValidEmail = (v) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
   const isSignIn = pwMode === 'signin';
+
+  // 8 character minimum aligns with NIST SP 800-63B §5.1.1.2 guidance.
+  const PASSWORD_MIN_LENGTH = 8;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const clearMessages = () => {
@@ -93,7 +101,7 @@ export default function AuthScreen() {
 
   // ── Password flow ────────────────────────────────────────────────────────
   const canSubmitPassword =
-    isValidEmail(trimmedEmail) && password.length >= 6 && !busy;
+    isValidEmail(trimmedEmail) && password.length >= PASSWORD_MIN_LENGTH && !busy;
 
   const submitPassword = async () => {
     if (!canSubmitPassword || !supabase) return;
@@ -113,23 +121,26 @@ export default function AuthScreen() {
           password,
         });
         if (err) throw err;
-        // If email confirmation is required, Supabase returns a user but
-        // no session. Tell the user to go confirm the email.
-        if (!data?.session) {
-          if (REQUIRE_EMAIL_CONFIRMATION) {
-            setInfo('Check your email for a confirmation link, then sign in.');
-            setPwMode('signin');
-            setPassword('');
-          } else {
-            // Email confirmation is disabled — try to sign the user in
-            // immediately so they don't have to do anything else.
-            const { error: signInErr } = await supabase.auth.signInWithPassword({
-              email: trimmedEmail,
-              password,
-            });
-            if (signInErr) throw signInErr;
-          }
+        // Detect the server's actual policy from the response shape rather
+        // than trusting the client-side flag. When email confirmation is
+        // ON, Supabase returns a user object but no session -- attempting
+        // signInWithPassword in that state produces a generic "Email not
+        // confirmed" error that is surfaced verbatim and confuses users.
+        const serverWantsConfirmation = !data?.session;
+
+        if (serverWantsConfirmation) {
+          setInfo(
+            REQUIRE_EMAIL_CONFIRMATION
+              ? 'Check your email for a confirmation link, then sign in.'
+              : 'Almost there — check your inbox to confirm your email, then sign in.'
+          );
+          setPwMode('signin');
+          setPassword('');
+          return;
         }
+
+        // Server returned a session immediately — confirmation is OFF.
+        // No further action needed; auth listener will pick it up.
       }
     } catch (e) {
       setError(e?.message || 'Something went wrong. Try again.');
@@ -263,7 +274,7 @@ export default function AuthScreen() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="At least 6 characters"
+                placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                 placeholderTextColor={colors.textFaint}
                 style={styles.input}
                 secureTextEntry

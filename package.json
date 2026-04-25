@@ -7,7 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "dev": "REACT_NATIVE_PACKAGER_HOSTNAME=100.84.160.90 expo start",
+    "dev": "cross-env REACT_NATIVE_PACKAGER_HOSTNAME=${EXPO_PACKAGER_HOSTNAME:-127.0.0.1} expo start",
     "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"
   },
   "dependencies": {
@@ -27,7 +27,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "babel-preset-expo": "~54.0.10"
+    "babel-preset-expo": "~54.0.10",
+    "cross-env": "^7.0.3"
   },
   "private": true
 }

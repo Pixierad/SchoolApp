@@ -16,14 +16,18 @@ import { ThemeProvider, useTheme } from './src/theme';
 import { todayISO, daysBetween, dueStatus } from './src/utils/dates';
 import {
   loadTasks,
-  saveTasks,
+  upsertTask,
+  deleteTask,
   loadSubjects,
-  saveSubjects,
+  upsertSubject,
+  deleteSubject,
   loadUserName,
   saveUserName,
+  loadChangelogLastSeen,
   newId,
 } from './src/storage';
 import { supabase, isSupabaseConfigured } from './src/supabase';
+import { CHANGELOG, latestChangelogVersion } from './src/changelog';
 
 import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
@@ -32,6 +36,7 @@ import SettingsSheet from './src/components/SettingsSheet';
 import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 import AuthScreen from './src/components/AuthScreen';
+import ChangelogSheet from './src/components/ChangelogSheet';
 
 export default function App() {
   return (
@@ -66,6 +71,8 @@ function AppContent() {
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [changelogVisible, setChangelogVisible] = useState(false);
+  const [hasUnreadChangelog, setHasUnreadChangelog] = useState(false);
 
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
   const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
@@ -114,13 +121,19 @@ function AppContent() {
     };
   }, [session, sessionUserId]);
 
+  // Compute "is the latest changelog version unseen?" once on mount.
   useEffect(() => {
-    if (!loading) saveTasks(tasks);
-  }, [tasks, loading]);
-
-  useEffect(() => {
-    if (!loading) saveSubjects(subjects);
-  }, [subjects, loading]);
+    let cancelled = false;
+    (async () => {
+      const seen = await loadChangelogLastSeen();
+      const latest = latestChangelogVersion();
+      if (cancelled) return;
+      setHasUnreadChangelog(Boolean(latest && seen !== latest));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const counts = useMemo(() => {
     const today = todayISO();
@@ -140,14 +153,16 @@ function AppContent() {
   }, [tasks]);
 
   const filtered = useMemo(() => {
-    const today = todayISO();
+    // All filter branches now route through dueStatus so future changes
+    // (e.g. a grace period for "overdue") propagate uniformly.
     const matches = tasks.filter((t) => {
       const status = dueStatus(t.dueDate, t.done);
       switch (filter) {
         case 'today':
-          return !t.done && t.dueDate && daysBetween(today, t.dueDate) === 0;
+          return status === 'today';
         case 'upcoming':
-          return !t.done && t.dueDate && daysBetween(today, t.dueDate) > 0;
+          // "upcoming" = anything in the future that isn't overdue/today/done.
+          return !t.done && (status === 'soon' || status === 'future');
         case 'overdue':
           return status === 'overdue';
         case 'done':
@@ -166,10 +181,12 @@ function AppContent() {
     });
   }, [tasks, filter]);
 
+  // OPEN tasks per subject -- mirrors the "tasks remaining" UX we
+  // expose on the subject row. Done tasks are explicitly excluded.
   const taskCountsBySubject = useMemo(() => {
     const out = {};
     for (const t of tasks) {
-      if (!t.subject) continue;
+      if (!t.subject || t.done) continue;
       out[t.subject] = (out[t.subject] ?? 0) + 1;
     }
     return out;
@@ -200,12 +217,17 @@ function AppContent() {
     setResumeFormAfterSubjects(false);
   };
 
+  // ── Per-row mutations ─────────────────────────────────────────────────────
+  // Each handler updates local state AND issues a single targeted write to
+  // storage. This replaces the bulk "save the entire table" pattern that
+  // upserted every row on every keystroke.
+
   const handleSaveTask = useCallback(
     (values) => {
       if (editingTask) {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === editingTask.id ? { ...t, ...values } : t))
-        );
+        const updated = { ...editingTask, ...values };
+        setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? updated : t)));
+        upsertTask(updated);
       } else {
         const newTask = {
           id: newId(),
@@ -217,6 +239,7 @@ function AppContent() {
           createdAt: Date.now(),
         };
         setTasks((prev) => [newTask, ...prev]);
+        upsertTask(newTask);
       }
       closeForm();
     },
@@ -225,36 +248,91 @@ function AppContent() {
 
   const handleDeleteTask = useCallback(() => {
     if (!editingTask) return;
-    setTasks((prev) => prev.filter((t) => t.id !== editingTask.id));
+    const id = editingTask.id;
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    deleteTask(id);
     closeForm();
   }, [editingTask]);
 
   const toggleDone = useCallback((id) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+      const changed = next.find((t) => t.id === id);
+      if (changed) upsertTask(changed);
+      return next;
+    });
   }, []);
 
   const quickDeleteTask = useCallback((id) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    deleteTask(id);
   }, []);
 
+  // SubjectManager passes us the full next array. Diff it against current
+  // state so we can issue per-row writes (and clear the subject tag from
+  // any tasks that referenced a deleted subject).
   const updateSubjects = useCallback(
     (nextSubjects) => {
-      const prevByName = new Set(subjects.map((s) => s.name));
-      const nextByName = new Set(nextSubjects.map((s) => s.name));
-      const removedNames = [...prevByName].filter((n) => !nextByName.has(n));
+      const prevByName = new Map(subjects.map((s) => [s.name, s]));
+      const nextByName = new Map(nextSubjects.map((s) => [s.name, s]));
+
+      const removedNames = [...prevByName.keys()].filter((n) => !nextByName.has(n));
+      const addedOrChanged = [...nextByName.entries()].filter(
+        ([name, s]) => !prevByName.has(name) || !subjectShallowEqual(prevByName.get(name), s)
+      );
+
+      // Remove deleted subjects from any tagged tasks.
       if (removedNames.length > 0) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            removedNames.includes(t.subject) ? { ...t, subject: null } : t
-          )
-        );
+        const removedSet = new Set(removedNames);
+        setTasks((prev) => {
+          const updates = [];
+          const next = prev.map((t) => {
+            if (t.subject && removedSet.has(t.subject)) {
+              const cleared = { ...t, subject: null };
+              updates.push(cleared);
+              return cleared;
+            }
+            return t;
+          });
+          // Persist the updates outside the setter (per-row).
+          updates.forEach((u) => upsertTask(u));
+          return next;
+        });
       }
+
+      // Persist subject mutations.
+      removedNames.forEach((name) => deleteSubject(name));
+      addedOrChanged.forEach(([, s]) => upsertSubject(s));
+
       setSubjects(nextSubjects);
     },
     [subjects]
   );
+
+  const handleSignOut = useCallback(async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('Sign out failed:', e?.message);
+      }
+    }
+    // Clear in-memory state ONLY -- we never call saveTasks([]) here, which
+    // in cloud mode would now re-route through cloudMode() === null and
+    // silently overwrite legacy local data. Closing the sheet is enough.
+    setTasks([]);
+    setSubjects([]);
+    setUserName('');
+    setSettingsVisible(false);
+    setLoading(false);
+  }, []);
+
+  const openChangelog = useCallback(() => {
+    // The sheet itself persists last-seen on open, so clearing the local
+    // dot here keeps the UI in sync without an extra round-trip.
+    setHasUnreadChangelog(false);
+    setChangelogVisible(true);
+  }, []);
 
   // Still determining the initial Supabase session.
   if (session === undefined) {
@@ -294,8 +372,17 @@ function AppContent() {
           <Text style={styles.headerTitle}>Your tasks</Text>
         </View>
         <Pressable
-          onPress={() => setSettingsVisible(true)}
+          onPress={openChangelog}
           style={styles.iconBtn}
+          hitSlop={8}
+          accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
+        >
+          <Text style={styles.iconBtnText}>🆕</Text>
+          {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
+        </Pressable>
+        <Pressable
+          onPress={() => setSettingsVisible(true)}
+          style={[styles.iconBtn, { marginLeft: spacing.sm }]}
           hitSlop={8}
           accessibilityLabel="Settings"
         >
@@ -381,24 +468,32 @@ function AppContent() {
           saveUserName(name);
         }}
         session={session}
-        onSignOut={async () => {
-          if (supabase) {
-            try {
-              await supabase.auth.signOut();
-            } catch (e) {
-              console.warn('Sign out failed:', e?.message);
-            }
-          }
-          // Clear in-memory state so no previous-user data lingers on screen.
-          setTasks([]);
-          setSubjects([]);
-          setUserName('');
+        onSignOut={handleSignOut}
+        onShowChangelog={() => {
           setSettingsVisible(false);
+          // Defer so the settings sheet can finish dismissing first.
+          setTimeout(openChangelog, 250);
         }}
+      />
+
+      <ChangelogSheet
+        visible={changelogVisible}
+        entries={CHANGELOG}
+        onClose={() => setChangelogVisible(false)}
       />
 
       <VersionBadge styles={styles} />
     </SafeAreaView>
+  );
+}
+
+function subjectShallowEqual(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.name === b.name &&
+    (a.room ?? '') === (b.room ?? '') &&
+    (a.teacher ?? '') === (b.teacher ?? '') &&
+    (a.color ?? null) === (b.color ?? null)
   );
 }
 
@@ -415,7 +510,11 @@ function VersionBadge({ styles }) {
 }
 
 function AddTaskFab({ onPress, styles, shadow }) {
-  const scale = useRef(new Animated.Value(1)).current;
+  // Lazy-init via useRef(null) so a fresh Animated.Value isn't allocated and
+  // discarded on every re-render.
+  const scaleRef = useRef(null);
+  if (scaleRef.current == null) scaleRef.current = new Animated.Value(1);
+  const scale = scaleRef.current;
 
   const start = () => {
     Animated.timing(scale, {
@@ -456,7 +555,11 @@ function ProgressCard({ progress, styles }) {
   const { doneCount, total, pct } = progress;
   const { shadow } = useTheme();
 
-  const animatedPct = useRef(new Animated.Value(pct)).current;
+  // Lazy allocation -- avoids re-creating the Animated.Value on every render.
+  const animatedPctRef = useRef(null);
+  if (animatedPctRef.current == null) animatedPctRef.current = new Animated.Value(pct);
+  const animatedPct = animatedPctRef.current;
+
   useEffect(() => {
     Animated.timing(animatedPct, {
       toValue: pct,
@@ -587,9 +690,21 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
+      position: 'relative',
     },
     iconBtnText: {
       fontSize: 20,
+    },
+    unreadDot: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.danger,
+      borderWidth: 2,
+      borderColor: colors.bg,
     },
     progressCard: {
       backgroundColor: colors.card,

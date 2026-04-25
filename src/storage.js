@@ -8,9 +8,22 @@
 //     is still used as a lightweight offline cache per-user so the UI can
 //     render instantly on boot.
 //
-// Callers import the top-level helpers (loadTasks/saveTasks/etc.) and don't
-// need to care which backend is active. App.js picks up an auth state
-// listener to re-load when the user signs in/out.
+// Callers import the top-level helpers (loadTasks, upsertTask, deleteTask,
+// loadSubjects, upsertSubject, deleteSubject, loadUserName, saveUserName)
+// and don't need to care which backend is active. App.js picks up an auth
+// state listener to re-load when the user signs in/out.
+//
+// IMPORTANT design notes (see code-review):
+//   1. We perform per-row mutations (upsertTask / deleteTask) instead of
+//      bulk re-uploading the whole table on every change. This avoids
+//      destroying server `created_at` ordering, eliminates write-races
+//      between concurrent edits, and keeps Supabase quota use bounded.
+//   2. A serialised write queue (`runQueued`) guarantees that overlapping
+//      saves on the same row execute in order, removing the lost-write
+//      race that the bulk-save pattern was vulnerable to.
+//   3. On first sign-in we attempt a one-shot migration of any legacy
+//      local-only data into the user-scoped key so users who upgrade from
+//      a pre-Supabase build don't silently lose their tasks/subjects.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured, currentUserId } from './supabase';
@@ -21,6 +34,7 @@ import { supabase, isSupabaseConfigured, currentUserId } from './supabase';
 const LEGACY_TASKS_KEY = '@simpleapp:tasks:v1';
 const LEGACY_SUBJECTS_KEY = '@simpleapp:subjects:v1';
 const LEGACY_USER_NAME_KEY = '@simpleapp:userName:v1';
+const MIGRATION_FLAG_PREFIX = '@simpleapp:migrated:';
 
 function tasksKey(userId) {
   return userId ? `@simpleapp:tasks:${userId}:v1` : LEGACY_TASKS_KEY;
@@ -32,11 +46,27 @@ function userNameKey(userId) {
   return userId ? `@simpleapp:userName:${userId}:v1` : LEGACY_USER_NAME_KEY;
 }
 
-// Small helper: true when we should hit Supabase.
+// Small helper: returns the active user id when we should hit Supabase, else null.
 async function cloudMode() {
   if (!isSupabaseConfigured || !supabase) return null;
   const uid = await currentUserId();
   return uid || null;
+}
+
+// ── Serialised write queue ─────────────────────────────────────────────────
+// All cloud writes (single-row upserts/deletes) are funnelled through this
+// promise chain so concurrent setState-driven saves cannot interleave on the
+// server. This addresses the race in bulk saveTasks (review item #5).
+let _writeChain = Promise.resolve();
+function runQueued(fn) {
+  const next = _writeChain.then(() => fn()).catch((e) => {
+    console.warn('Queued write failed:', e?.message || e);
+  });
+  _writeChain = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
 }
 
 // ── Normalizers ────────────────────────────────────────────────────────────
@@ -66,7 +96,12 @@ function taskToRow(t, userId) {
     subject: t.subject ?? null,
     due_date: t.dueDate ?? null,
     done: !!t.done,
-    created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
+    // Only set created_at when the caller actually provided one. Letting the
+    // server default fire (now()) on insert preserves the original value on
+    // subsequent UPSERTs (because we omit the column from the update set).
+    ...(t.createdAt
+      ? { created_at: new Date(t.createdAt).toISOString() }
+      : {}),
   };
 }
 function rowToTask(r) {
@@ -99,15 +134,126 @@ function rowToSubject(r) {
   };
 }
 
+// ── Local cache helpers ────────────────────────────────────────────────────
+
+async function readLocalArray(key) {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn('Failed to read local array:', e);
+    return [];
+  }
+}
+
+async function writeLocalArray(key, arr) {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(arr));
+  } catch (e) {
+    console.warn('Failed to write local array:', e);
+  }
+}
+
+// ── One-time legacy migration ──────────────────────────────────────────────
+// When a user signs in for the first time on a build that has Supabase
+// enabled, copy any legacy local-only data into the user-scoped slot AND
+// upload it to the cloud. The migration flag is keyed per-user so each
+// new sign-in on the same device has the chance to import.
+async function migrateLegacyIfNeeded(uid) {
+  if (!uid) return;
+  const flagKey = `${MIGRATION_FLAG_PREFIX}${uid}`;
+  try {
+    const already = await AsyncStorage.getItem(flagKey);
+    if (already) return;
+  } catch {
+    // If we can't read the flag we don't try the migration -- safer to
+    // skip than to risk duplicating data on every boot.
+    return;
+  }
+
+  try {
+    const [legacyTasksRaw, legacySubjectsRaw, legacyName] = await Promise.all([
+      AsyncStorage.getItem(LEGACY_TASKS_KEY),
+      AsyncStorage.getItem(LEGACY_SUBJECTS_KEY),
+      AsyncStorage.getItem(LEGACY_USER_NAME_KEY),
+    ]);
+    const legacyTasks = legacyTasksRaw ? safeParseArray(legacyTasksRaw) : [];
+    const legacySubjects = legacySubjectsRaw ? safeParseArray(legacySubjectsRaw) : [];
+
+    // Tasks ── only push rows that don't already exist on the server.
+    if (legacyTasks.length > 0 && supabase) {
+      const { data: existing } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('user_id', uid);
+      const known = new Set((existing || []).map((r) => r.id));
+      const fresh = legacyTasks.filter((t) => t && t.id && !known.has(t.id));
+      if (fresh.length > 0) {
+        const rows = fresh.map((t) => taskToRow(t, uid));
+        const { error } = await supabase
+          .from('tasks')
+          .upsert(rows, { onConflict: 'id' });
+        if (error) throw error;
+      }
+    }
+
+    // Subjects -- keyed by (user_id, name). Skip names already present.
+    if (legacySubjects.length > 0 && supabase) {
+      const { data: existing } = await supabase
+        .from('subjects')
+        .select('name')
+        .eq('user_id', uid);
+      const known = new Set((existing || []).map((r) => r.name));
+      const normalized = legacySubjects.map(normalizeSubject).filter(Boolean);
+      const fresh = normalized.filter((s) => !known.has(s.name));
+      if (fresh.length > 0) {
+        const rows = fresh.map((s) => subjectToRow(s, uid));
+        const { error } = await supabase
+          .from('subjects')
+          .upsert(rows, { onConflict: 'user_id,name' });
+        if (error) throw error;
+      }
+    }
+
+    // User name -- only adopt if the cloud profile has nothing yet.
+    if (legacyName && supabase) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', uid)
+        .maybeSingle();
+      if (!profile?.name) {
+        await supabase
+          .from('profiles')
+          .upsert({ id: uid, name: legacyName }, { onConflict: 'id' });
+      }
+    }
+
+    await AsyncStorage.setItem(flagKey, '1');
+  } catch (e) {
+    // Don't crash the app on a bad migration -- just log and try again next boot.
+    console.warn('Legacy migration failed (will retry next launch):', e?.message || e);
+  }
+}
+
+function safeParseArray(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Tasks ──────────────────────────────────────────────────────────────────
 
 export async function loadTasks() {
   const uid = await cloudMode();
 
   if (uid) {
-    // Render fast from cache, then hydrate from the server in the background.
-    // For the first boot we still await the server so the UI shows the real
-    // data. Callers treat the returned promise as authoritative.
+    await migrateLegacyIfNeeded(uid);
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -116,77 +262,77 @@ export async function loadTasks() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       const tasks = (data || []).map(rowToTask);
-      // Update the cache for offline reads.
       AsyncStorage.setItem(tasksKey(uid), JSON.stringify(tasks)).catch(() => {});
       return tasks;
     } catch (e) {
       console.warn('Supabase loadTasks failed, falling back to cache:', e?.message);
-      return readLocalTasks(tasksKey(uid));
+      return readLocalArray(tasksKey(uid));
     }
   }
 
-  return readLocalTasks(tasksKey(null));
+  return readLocalArray(tasksKey(null));
 }
 
-async function readLocalTasks(key) {
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    console.warn('Failed to load tasks:', e);
-    return [];
-  }
-}
-
-// Bulk save -- used by the simple "setTasks" pattern in App.js.
-// In cloud mode we diff against the server and upsert/delete as needed.
-export async function saveTasks(tasks) {
+// Per-row upsert (insert or update a single task). All callers go through the
+// queue so concurrent toggles serialise.
+export async function upsertTask(task) {
+  if (!task || !task.id) return;
   const uid = await cloudMode();
 
   if (uid) {
-    // Always keep the local cache current.
-    AsyncStorage.setItem(tasksKey(uid), JSON.stringify(tasks)).catch(() => {});
-    try {
-      // Fetch current ids on the server to decide what to delete.
-      const { data: existing, error: selErr } = await supabase
+    // Update the local cache eagerly.
+    await updateLocalTaskCache(uid, (prev) => {
+      const idx = prev.findIndex((t) => t.id === task.id);
+      if (idx >= 0) {
+        const next = prev.slice();
+        next[idx] = { ...prev[idx], ...task };
+        return next;
+      }
+      return [task, ...prev];
+    });
+    return runQueued(async () => {
+      const { error } = await supabase
         .from('tasks')
-        .select('id')
-        .eq('user_id', uid);
-      if (selErr) throw selErr;
+        .upsert([taskToRow(task, uid)], { onConflict: 'id' });
+      if (error) throw error;
+    });
+  }
 
-      const desiredIds = new Set(tasks.map((t) => t.id));
-      const serverIds = new Set((existing || []).map((r) => r.id));
-
-      const toDelete = [...serverIds].filter((id) => !desiredIds.has(id));
-      if (toDelete.length > 0) {
-        const { error: delErr } = await supabase
-          .from('tasks')
-          .delete()
-          .eq('user_id', uid)
-          .in('id', toDelete);
-        if (delErr) throw delErr;
-      }
-
-      if (tasks.length > 0) {
-        const rows = tasks.map((t) => taskToRow(t, uid));
-        const { error: upErr } = await supabase
-          .from('tasks')
-          .upsert(rows, { onConflict: 'id' });
-        if (upErr) throw upErr;
-      }
-    } catch (e) {
-      console.warn('Supabase saveTasks failed (cached locally):', e?.message);
+  await updateLocalTaskCache(null, (prev) => {
+    const idx = prev.findIndex((t) => t.id === task.id);
+    if (idx >= 0) {
+      const next = prev.slice();
+      next[idx] = { ...prev[idx], ...task };
+      return next;
     }
-    return;
+    return [task, ...prev];
+  });
+}
+
+export async function deleteTask(id) {
+  if (!id) return;
+  const uid = await cloudMode();
+
+  if (uid) {
+    await updateLocalTaskCache(uid, (prev) => prev.filter((t) => t.id !== id));
+    return runQueued(async () => {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', id);
+      if (error) throw error;
+    });
   }
 
-  try {
-    await AsyncStorage.setItem(tasksKey(null), JSON.stringify(tasks));
-  } catch (e) {
-    console.warn('Failed to save tasks:', e);
-  }
+  await updateLocalTaskCache(null, (prev) => prev.filter((t) => t.id !== id));
+}
+
+async function updateLocalTaskCache(uid, mutator) {
+  const key = tasksKey(uid);
+  const current = await readLocalArray(key);
+  const next = mutator(current);
+  await writeLocalArray(key, next);
 }
 
 // ── Subjects ───────────────────────────────────────────────────────────────
@@ -195,6 +341,7 @@ export async function loadSubjects() {
   const uid = await cloudMode();
 
   if (uid) {
+    await migrateLegacyIfNeeded(uid);
     try {
       const { data, error } = await supabase
         .from('subjects')
@@ -207,70 +354,84 @@ export async function loadSubjects() {
       return subjects;
     } catch (e) {
       console.warn('Supabase loadSubjects failed, falling back to cache:', e?.message);
-      return readLocalSubjects(subjectsKey(uid));
+      const cached = await readLocalArray(subjectsKey(uid));
+      return cached.map(normalizeSubject).filter(Boolean);
     }
   }
 
-  return readLocalSubjects(subjectsKey(null));
+  const cached = await readLocalArray(subjectsKey(null));
+  return cached.map(normalizeSubject).filter(Boolean);
 }
 
-async function readLocalSubjects(key) {
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(normalizeSubject).filter(Boolean);
-  } catch (e) {
-    console.warn('Failed to load subjects:', e);
-    return [];
-  }
-}
-
-export async function saveSubjects(subjects) {
+// Insert / update a subject. If `previousName` differs from `subject.name`
+// (i.e. a rename), the old row is removed first so the (user_id, name) PK
+// stays consistent.
+export async function upsertSubject(subject, previousName = null) {
+  const cleaned = normalizeSubject(subject);
+  if (!cleaned) return;
   const uid = await cloudMode();
 
+  const renamed = previousName && previousName !== cleaned.name;
+
   if (uid) {
-    AsyncStorage.setItem(subjectsKey(uid), JSON.stringify(subjects)).catch(() => {});
-    try {
-      // Subjects are keyed by (user_id, name). Diff by name and sync.
-      const { data: existing, error: selErr } = await supabase
-        .from('subjects')
-        .select('name')
-        .eq('user_id', uid);
-      if (selErr) throw selErr;
-
-      const desiredNames = new Set(subjects.map((s) => s.name));
-      const serverNames = new Set((existing || []).map((r) => r.name));
-
-      const toDelete = [...serverNames].filter((n) => !desiredNames.has(n));
-      if (toDelete.length > 0) {
+    await updateLocalSubjectCache(uid, (prev) => {
+      let next = prev.slice();
+      if (renamed) next = next.filter((s) => s.name !== previousName);
+      const idx = next.findIndex((s) => s.name === cleaned.name);
+      if (idx >= 0) next[idx] = cleaned;
+      else next.push(cleaned);
+      return next;
+    });
+    return runQueued(async () => {
+      if (renamed) {
         const { error: delErr } = await supabase
           .from('subjects')
           .delete()
           .eq('user_id', uid)
-          .in('name', toDelete);
+          .eq('name', previousName);
         if (delErr) throw delErr;
       }
-
-      if (subjects.length > 0) {
-        const rows = subjects.map((s) => subjectToRow(s, uid));
-        const { error: upErr } = await supabase
-          .from('subjects')
-          .upsert(rows, { onConflict: 'user_id,name' });
-        if (upErr) throw upErr;
-      }
-    } catch (e) {
-      console.warn('Supabase saveSubjects failed (cached locally):', e?.message);
-    }
-    return;
+      const { error: upErr } = await supabase
+        .from('subjects')
+        .upsert([subjectToRow(cleaned, uid)], { onConflict: 'user_id,name' });
+      if (upErr) throw upErr;
+    });
   }
 
-  try {
-    await AsyncStorage.setItem(subjectsKey(null), JSON.stringify(subjects));
-  } catch (e) {
-    console.warn('Failed to save subjects:', e);
+  await updateLocalSubjectCache(null, (prev) => {
+    let next = prev.slice();
+    if (renamed) next = next.filter((s) => s.name !== previousName);
+    const idx = next.findIndex((s) => s.name === cleaned.name);
+    if (idx >= 0) next[idx] = cleaned;
+    else next.push(cleaned);
+    return next;
+  });
+}
+
+export async function deleteSubject(name) {
+  if (!name) return;
+  const uid = await cloudMode();
+
+  if (uid) {
+    await updateLocalSubjectCache(uid, (prev) => prev.filter((s) => s.name !== name));
+    return runQueued(async () => {
+      const { error } = await supabase
+        .from('subjects')
+        .delete()
+        .eq('user_id', uid)
+        .eq('name', name);
+      if (error) throw error;
+    });
   }
+
+  await updateLocalSubjectCache(null, (prev) => prev.filter((s) => s.name !== name));
+}
+
+async function updateLocalSubjectCache(uid, mutator) {
+  const key = subjectsKey(uid);
+  const current = (await readLocalArray(key)).map(normalizeSubject).filter(Boolean);
+  const next = mutator(current);
+  await writeLocalArray(key, next);
 }
 
 // ── User name (profile) ────────────────────────────────────────────────────
@@ -280,6 +441,11 @@ export async function loadUserName() {
 
   if (uid) {
     try {
+      // NOTE: maybeSingle() (not single()) is intentional. The profile row
+      // is created by a database trigger on sign-up, but users that signed
+      // up before the trigger was deployed have no row. maybeSingle() lets
+      // us return '' in that case rather than surfacing an error -- the
+      // first saveUserName() call will then create the row via upsert.
       const { data, error } = await supabase
         .from('profiles')
         .select('name')
@@ -312,21 +478,39 @@ export async function saveUserName(name) {
 
   if (uid) {
     AsyncStorage.setItem(userNameKey(uid), name).catch(() => {});
-    try {
+    return runQueued(async () => {
       const { error } = await supabase
         .from('profiles')
         .upsert({ id: uid, name }, { onConflict: 'id' });
       if (error) throw error;
-    } catch (e) {
-      console.warn('Supabase saveUserName failed (cached locally):', e?.message);
-    }
-    return;
+    });
   }
 
   try {
     await AsyncStorage.setItem(userNameKey(null), name);
   } catch (e) {
     console.warn('Failed to save user name:', e);
+  }
+}
+
+// ── Changelog (last-seen version) ─────────────────────────────────────────
+// Used by the in-app changelog to decide whether to show an "unread" dot.
+const CHANGELOG_SEEN_KEY = '@simpleapp:changelog:lastSeen:v1';
+
+export async function loadChangelogLastSeen() {
+  try {
+    return (await AsyncStorage.getItem(CHANGELOG_SEEN_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveChangelogLastSeen(version) {
+  if (!version) return;
+  try {
+    await AsyncStorage.setItem(CHANGELOG_SEEN_KEY, version);
+  } catch (e) {
+    console.warn('Failed to persist changelog seen version:', e?.message);
   }
 }
 

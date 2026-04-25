@@ -43,7 +43,24 @@ export default function TaskForm({
   const [showPicker, setShowPicker] = useState(false);
 
   const screenHeight = Dimensions.get('window').height;
-  const translateY = useRef(new Animated.Value(screenHeight)).current;
+  // Lazy-init the Animated.Value so a fresh one isn't allocated and
+  // immediately discarded on every re-render.
+  const translateYRef = useRef(null);
+  if (translateYRef.current == null) {
+    translateYRef.current = new Animated.Value(screenHeight);
+  }
+  const translateY = translateYRef.current;
+
+  // Track mount status so deferred animation callbacks (200ms timing.start
+  // continuations) don't fire onCancel against a parent that has already
+  // unmounted or otherwise advanced past this state.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -81,7 +98,8 @@ export default function TaskForm({
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
-            onCancel?.();
+            // Skip the callback if we've unmounted in the meantime.
+            if (mountedRef.current) onCancel?.();
           });
         } else {
           Animated.spring(translateY, {
@@ -96,14 +114,18 @@ export default function TaskForm({
     })
   ).current;
 
+  // Re-sync the local form state from `task` whenever the caller asks us to
+  // reset (via resetKey) OR the underlying task identity changes. Including
+  // task?.id removes the fragile coupling that earlier required callers to
+  // bump resetKey *before* changing task -- a future caller that swaps the
+  // prop directly will now still see the right initial values.
   useEffect(() => {
     setTitle(task?.title ?? '');
     setDescription(task?.description ?? '');
     setSubject(task?.subject ?? '');
     setDueDate(task?.dueDate ?? null);
     setShowPicker(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
+  }, [resetKey, task?.id]);
 
   const handleSave = () => {
     const trimmed = title.trim();

@@ -41,6 +41,13 @@ create table if not exists public.tasks (
 create index if not exists tasks_user_id_idx on public.tasks(user_id);
 create index if not exists subjects_user_id_idx on public.subjects(user_id);
 
+-- The application treats subject names as case-insensitive when checking
+-- for duplicates ("Math" vs "math" should not both exist for the same
+-- user). The (user_id, name) primary key alone is case-sensitive, so we
+-- enforce the case-insensitive uniqueness with a functional index.
+create unique index if not exists subjects_user_id_name_ci_uniq
+  on public.subjects(user_id, lower(name));
+
 -- ------------------------------------------------------------------
 -- Row-Level Security
 -- ------------------------------------------------------------------

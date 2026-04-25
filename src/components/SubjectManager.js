@@ -38,7 +38,21 @@ export default function SubjectManager({
   }, [visible]);
 
   const screenHeight = Dimensions.get('window').height;
-  const translateY = useRef(new Animated.Value(0)).current;
+  // Lazy-init Animated.Value (otherwise a fresh one is created and discarded
+  // on every re-render).
+  const translateYRef = useRef(null);
+  if (translateYRef.current == null) translateYRef.current = new Animated.Value(0);
+  const translateY = translateYRef.current;
+
+  // Mount tracking guards animation continuations against firing after
+  // the parent has unmounted or advanced past this state.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -73,7 +87,9 @@ export default function SubjectManager({
             toValue: screenHeight,
             duration: 200,
             useNativeDriver: true,
-          }).start(() => onClose());
+          }).start(() => {
+            if (mountedRef.current) onClose?.();
+          });
         } else {
           Animated.spring(translateY, {
             toValue: 0,
