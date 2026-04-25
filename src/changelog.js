@@ -22,6 +22,7 @@ export const CHANGELOG = [
     title: 'Hotfix: deployment rejection fixed',
     notes: [
       'Fixed an issue where Vercel would reject the latest deployment due to no SSH ket for the repo (my bad).',
+      'New: legit nothing lol.'
     ],
   },
   {
