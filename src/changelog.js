@@ -23,7 +23,7 @@ export const CHANGELOG = [
     notes: [
       'Fixed an issue where Vercel would reject the latest deployment due to no SSH ket for the repo (my bad).',
     ],
-  }
+  },
   {
     version: '1.1.0',
     date: '2026-04-25',
