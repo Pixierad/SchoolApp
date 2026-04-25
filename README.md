@@ -12,28 +12,6 @@ A clean, modern Expo (React Native) app for tracking schoolwork. Create tasks, t
 - **Persistence**: everything saves locally to device storage (AsyncStorage). Survives app restarts.
 - **No account, no backend**: fully offline.
 
-## Get started
-
-```bash
-cd D:\SchoolApp
-npm install
-npm start
-```
-
-Then from Expo Dev Tools:
-- Press `i` for iOS simulator
-- Press `a` for Android emulator
-- Press `w` for web
-- Or scan the QR code with Expo Go on your phone
-
-### If you see version mismatch warnings
-
-Run this once to align dependency versions to your installed Expo SDK:
-
-```bash
-npx expo install --fix
-```
-
 ## Project structure
 
 ```

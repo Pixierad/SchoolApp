@@ -24,24 +24,15 @@ Write-Host "[2/6] Committing (signed)..." -ForegroundColor Cyan
 $msg = "Deploy: latest changes"
 if ($args.Count -gt 0) { $msg = $args -join ' ' }
 
-# Honour the user's commit.gpgsign config if it's already true; otherwise
-# pass -S explicitly so the deploy commit is signed even on machines that
-# haven't enabled global signing.
-$signGlobal = (& git config --global commit.gpgsign 2>$null)
-if ($signGlobal -eq 'true') {
-    $signFlag = ''
-} else {
-    $signFlag = '-S'
-}
+# Always pass -S explicitly. -S is idempotent: if commit.gpgsign is already
+# true globally git would sign anyway, and if it isn't (e.g. a fresh clone
+# on another machine) -S guarantees this deploy commit is still signed.
+# This removes the dependency on global config being correct.
 
 # git commit exits non-zero if nothing is staged; treat that as OK.
 $prevEAP = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-if ($signFlag) {
-    git commit $signFlag -m $msg
-} else {
-    git commit -m $msg
-}
+git commit -S -m $msg
 $ErrorActionPreference = $prevEAP
 
 Write-Host "[3/6] Verifying HEAD signature..." -ForegroundColor Cyan
