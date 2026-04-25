@@ -164,7 +164,7 @@ Read-Host '    Press Enter once you have added the key to GitHub as a SIGNING ke
 
 Write-Step '6/6' 'Checking the current HEAD commit...'
 $headSha = (& git rev-parse --short HEAD).Trim()
-& git verify-commit HEAD 2>$null 1>$null
+cmd /c "git verify-commit HEAD >nul 2>nul"
 $verifyExit = $LASTEXITCODE
 
 if ($verifyExit -eq 0) {
@@ -192,7 +192,7 @@ if ($verifyExit -eq 0) {
             exit 1
         }
 
-        & git verify-commit HEAD 2>$null 1>$null
+        cmd /c "git verify-commit HEAD >nul 2>nul"
         if ($LASTEXITCODE -eq 0) {
             Write-Ok 'HEAD is now signed and pushed. Re-run your Vercel deployment.'
         } else {

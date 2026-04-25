@@ -46,9 +46,13 @@ $ErrorActionPreference = $prevEAP
 
 Write-Host "[3/6] Verifying HEAD signature..." -ForegroundColor Cyan
 # git verify-commit emits its success message on stderr by convention.
-# Suppress both streams and rely on $LASTEXITCODE so a "Good signature"
-# message from git doesn't trip $ErrorActionPreference = 'Stop'.
-& git verify-commit HEAD 2>$null 1>$null
+# Under Windows PowerShell 5.x with $ErrorActionPreference = 'Stop',
+# native-command stderr is wrapped in NativeCommandError BEFORE the
+# PowerShell-level redirection (2>$null, 2>&1 | Out-Null) takes effect,
+# so it still trips Stop. The robust workaround is to do the redirection
+# at the Windows level via cmd.exe -- PowerShell never sees the bytes,
+# so it cannot wrap them. $LASTEXITCODE is still propagated.
+cmd /c "git verify-commit HEAD >nul 2>nul"
 if ($LASTEXITCODE -ne 0) {
     $head = (& git rev-parse --short HEAD).Trim()
     Write-Host ""
