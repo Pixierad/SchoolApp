@@ -105,6 +105,18 @@ create policy "tasks_delete_own"
 -- this just pre-populates an empty one so the UI is never empty.)
 -- ------------------------------------------------------------------
 
+-- ------------------------------------------------------------------
+-- Theme columns on profiles (added after initial schema).
+-- ------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists theme_key text not null default 'light',
+  add column if not exists custom_themes jsonb not null default '[]'::jsonb;
+
+-- ------------------------------------------------------------------
+-- Trigger: auto-create profile row on new sign-up.
+-- ------------------------------------------------------------------
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql

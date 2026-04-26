@@ -14,6 +14,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, isSupabaseConfigured, currentUserId } from './supabase';
 
 // ── Static tokens ───────────────────────────────────────────────────────────
 
@@ -467,13 +468,33 @@ export function makeCustomTheme({ name, baseIsDark, primary }) {
   };
 }
 
+// ── Cloud helper ────────────────────────────────────────────────────────────
+// Mirrors the cloudMode() pattern in storage.js: returns the active userId
+// when Supabase is configured and a session exists, else null.
+
+async function cloudMode() {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const uid = await currentUserId();
+  return uid || null;
+}
+
 // ── Context + Provider + hook ───────────────────────────────────────────────
 
-const THEME_KEY = '@simpleapp:theme:key:v2';
-const CUSTOM_THEMES_KEY = '@simpleapp:theme:customs:v1';
+// Bare keys are used in local-only mode (no session) and as the legacy
+// fallback. User-scoped keys prevent one user's theme from leaking to
+// another user on the same device.
+const THEME_KEY_BARE = '@simpleapp:theme:key:v2';
+const CUSTOM_THEMES_KEY_BARE = '@simpleapp:theme:customs:v1';
 // Legacy keys from the pre-theme-overhaul version — migrated on load.
 const LEGACY_MODE_KEY = '@simpleapp:theme:mode:v1';
 const LEGACY_ACCENT_KEY = '@simpleapp:theme:accent:v1';
+
+function themeKeyFor(userId) {
+  return userId ? `@simpleapp:theme:key:v2:${userId}` : THEME_KEY_BARE;
+}
+function customThemesKeyFor(userId) {
+  return userId ? `@simpleapp:theme:customs:v1:${userId}` : CUSTOM_THEMES_KEY_BARE;
+}
 
 const DEFAULT_THEME = 'light';
 
@@ -490,37 +511,78 @@ export function ThemeProvider({ children }) {
   const [customThemes, setCustomThemes] = useState([]);
   const [hydrated, setHydrated] = useState(false);
 
-  // Load saved prefs on mount (with migration from legacy mode+accent).
+  // Load saved prefs on mount.
+  // Cloud mode: fetch theme_key + custom_themes from Supabase profiles, fall
+  // back to user-scoped AsyncStorage cache if offline/no row.
+  // Local mode: read from bare AsyncStorage keys (with legacy mode migration).
   useEffect(() => {
     (async () => {
       try {
-        const [storedKey, storedCustomsRaw, legacyMode, legacyAccent] = await Promise.all([
-          AsyncStorage.getItem(THEME_KEY),
-          AsyncStorage.getItem(CUSTOM_THEMES_KEY),
-          AsyncStorage.getItem(LEGACY_MODE_KEY),
-          AsyncStorage.getItem(LEGACY_ACCENT_KEY),
-        ]);
+        const uid = await cloudMode();
+        let loadedKey = null;
+        let loadedCustoms = [];
 
-        let customs = [];
-        if (storedCustomsRaw) {
+        if (uid) {
+          // ── Cloud path ──────────────────────────────────────────────────
           try {
-            const parsed = JSON.parse(storedCustomsRaw);
-            if (Array.isArray(parsed)) customs = parsed.filter((t) => t && t.key);
-          } catch {
-            customs = [];
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('theme_key, custom_themes')
+              .eq('id', uid)
+              .maybeSingle();
+            if (error) throw error;
+            loadedKey = data?.theme_key ?? null;
+            const rawCustoms = data?.custom_themes;
+            if (Array.isArray(rawCustoms)) {
+              loadedCustoms = rawCustoms.filter((t) => t && t.key);
+            }
+            // Cache locally for offline use.
+            if (loadedKey) {
+              AsyncStorage.setItem(themeKeyFor(uid), loadedKey).catch(() => {});
+            }
+            AsyncStorage.setItem(customThemesKeyFor(uid), JSON.stringify(loadedCustoms)).catch(() => {});
+          } catch (e) {
+            console.warn('Supabase loadTheme failed, falling back to cache:', e?.message);
+            try {
+              loadedKey = await AsyncStorage.getItem(themeKeyFor(uid));
+              const raw = await AsyncStorage.getItem(customThemesKeyFor(uid));
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) loadedCustoms = parsed.filter((t) => t && t.key);
+              }
+            } catch { /* leave defaults */ }
           }
-        }
-        setCustomThemes(customs);
+        } else {
+          // ── Local path (with legacy migration) ─────────────────────────
+          const [storedKey, storedCustomsRaw, legacyMode, legacyAccent] = await Promise.all([
+            AsyncStorage.getItem(THEME_KEY_BARE),
+            AsyncStorage.getItem(CUSTOM_THEMES_KEY_BARE),
+            AsyncStorage.getItem(LEGACY_MODE_KEY),
+            AsyncStorage.getItem(LEGACY_ACCENT_KEY),
+          ]);
 
-        if (storedKey && (THEME_PRESETS[storedKey] || customs.some((t) => t.key === storedKey))) {
-          setThemeKey(storedKey);
-        } else if (legacyMode === 'dark') {
-          // Best-effort migration: fall back to 'dark' preset.
-          setThemeKey('dark');
-        } else if (legacyMode === 'light') {
-          setThemeKey('light');
+          if (storedCustomsRaw) {
+            try {
+              const parsed = JSON.parse(storedCustomsRaw);
+              if (Array.isArray(parsed)) loadedCustoms = parsed.filter((t) => t && t.key);
+            } catch { /* ignore */ }
+          }
+
+          if (storedKey) {
+            loadedKey = storedKey;
+          } else if (legacyMode === 'dark') {
+            // Best-effort migration: fall back to 'dark' preset.
+            loadedKey = 'dark';
+          } else if (legacyMode === 'light') {
+            loadedKey = 'light';
+          }
+          // legacyAccent is dropped silently — accent is now part of the theme.
         }
-        // legacyAccent is dropped silently — accent is now part of the theme.
+
+        setCustomThemes(loadedCustoms);
+        if (loadedKey && (THEME_PRESETS[loadedKey] || loadedCustoms.some((t) => t.key === loadedKey))) {
+          setThemeKey(loadedKey);
+        }
       } catch (e) {
         console.warn('Failed to load theme prefs:', e);
       } finally {
@@ -529,17 +591,30 @@ export function ThemeProvider({ children }) {
     })();
   }, []);
 
-  // Persist changes (skip until hydrated so we don't overwrite stored value
-  // with defaults before load finishes).
+  // Persist changes whenever themeKey or customThemes changes (after hydration).
+  // Cloud mode: write user-scoped AsyncStorage cache + upsert to Supabase.
+  // Local mode: write bare AsyncStorage keys.
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(THEME_KEY, themeKey).catch(() => {});
-  }, [themeKey, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    AsyncStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(customThemes)).catch(() => {});
-  }, [customThemes, hydrated]);
+    (async () => {
+      try {
+        const uid = await cloudMode();
+        if (uid) {
+          AsyncStorage.setItem(themeKeyFor(uid), themeKey).catch(() => {});
+          AsyncStorage.setItem(customThemesKeyFor(uid), JSON.stringify(customThemes)).catch(() => {});
+          const { error } = await supabase
+            .from('profiles')
+            .upsert({ id: uid, theme_key: themeKey, custom_themes: customThemes }, { onConflict: 'id' });
+          if (error) console.warn('Failed to save theme to Supabase:', error.message);
+        } else {
+          AsyncStorage.setItem(themeKeyFor(null), themeKey).catch(() => {});
+          AsyncStorage.setItem(customThemesKeyFor(null), JSON.stringify(customThemes)).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Failed to persist theme prefs:', e);
+      }
+    })();
+  }, [themeKey, customThemes, hydrated]);
 
   const setTheme = useCallback((key) => {
     setThemeKey(key);
