@@ -64,6 +64,33 @@ if (-not $inRepo) {
     exit 1
 }
 
+# Stale HEAD.lock left behind by a previous crashed git process will block
+# every write below ("fatal: cannot lock ref 'HEAD'"). Try to remove it
+# silently; if it's actually held by a live process, the Remove-Item will
+# fail and we surface a clear message.
+$gitDir = (& git rev-parse --git-dir).Trim()
+$headLock = Join-Path $gitDir 'HEAD.lock'
+if (Test-Path $headLock) {
+    try {
+        Remove-Item $headLock -Force -ErrorAction Stop
+        Write-Info "Cleared stale lock $headLock"
+    } catch {
+        Write-Err "A git process is holding $headLock. Close any open IDE/git GUI and re-run."
+        exit 1
+    }
+}
+
+# A local repo override of commit.gpgsign silently disables signing for
+# this repo only -- the global config we set below cannot reach it.
+# Detect and warn (we don't auto-unset, that's potentially destructive on
+# repos where the override is intentional).
+$localSign = (& git config --local commit.gpgsign 2>$null)
+if ($localSign -and $localSign -ne 'true') {
+    Write-Warn "Local override detected: commit.gpgsign = $localSign in $gitDir/config"
+    Write-Warn '   This will block signing for this repo. To clear it, run:'
+    Write-Warn '       git config --local --unset commit.gpgsign'
+}
+
 # --- 2. Locate or create an SSH key ----------------------------------------
 
 Write-Step '2/6' 'Locating an SSH key for signing...'
