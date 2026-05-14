@@ -17,14 +17,14 @@
 
 export const CHANGELOG = [
   {
-    version: '1.1.1 (Upcoming)',
-    date: '2026-05-08',
-    title: 'Coming next',
+    version: '1.2.0',
+    date: '2026-05-14',
+    title: 'Friends are cool lol',
     notes: [
-      'Coming soon: Study timer and being able to track study sessions for subjects',
-      'Coming soon: Repeating events.',
-      'Improvement: Universal theme',
-      'Bug fixes and more'
+      'New: New friends tab where you can add friends',
+      'New: Friends list',
+      'Improvement: Bottom bar redesigned',
+      'Coming soon: Chatting with friends in private temporary rooms for short collaboration'
     ],
   },
   {

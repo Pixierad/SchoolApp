@@ -21,13 +21,14 @@ import {
   loadSubjects,
   upsertSubject,
   deleteSubject,
-  loadUserName,
-  saveUserName,
+  loadProfile,
+  saveProfile,
   loadChangelogLastSeen,
   newId,
 } from './src/storage';
 import { supabase, isSupabaseConfigured } from './src/supabase';
 import { CHANGELOG, latestChangelogVersion } from './src/changelog';
+import { normalizeProfile, publicName } from './src/profile';
 
 import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
@@ -37,6 +38,8 @@ import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 import AuthScreen from './src/components/AuthScreen';
 import ChangelogSheet from './src/components/ChangelogSheet';
+import FriendsSheet from './src/components/FriendsSheet';
+import ProfileAvatar from './src/components/ProfileAvatar';
 
 export default function App() {
   return (
@@ -57,7 +60,7 @@ function AppContent() {
 
   const [tasks, setTasks] = useState([]);
   const [subjects, setSubjects] = useState([]);
-  const [userName, setUserName] = useState('');
+  const [profile, setProfile] = useState(() => normalizeProfile());
   const [loading, setLoading] = useState(true);
 
   // Auth state. `session === undefined` means we haven't checked yet;
@@ -71,6 +74,7 @@ function AppContent() {
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [friendsVisible, setFriendsVisible] = useState(false);
   const [changelogVisible, setChangelogVisible] = useState(false);
   const [hasUnreadChangelog, setHasUnreadChangelog] = useState(false);
   const [syncError, setSyncError] = useState(null);
@@ -110,11 +114,11 @@ function AppContent() {
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [t, s, n] = await Promise.all([loadTasks(), loadSubjects(), loadUserName()]);
+      const [t, s, p] = await Promise.all([loadTasks(), loadSubjects(), loadProfile()]);
       if (cancelled) return;
       setTasks(t);
       setSubjects(s);
-      setUserName(n);
+      setProfile(p);
       setLoading(false);
     })();
     return () => {
@@ -259,13 +263,22 @@ function AppContent() {
     [reportSyncError]
   );
 
-  const persistUserName = useCallback(
-    (name) => {
-      saveUserName(name)
+  const persistProfile = useCallback(
+    (nextProfile) => {
+      saveProfile(nextProfile)
         .then(() => setSyncError(null))
         .catch((e) => reportSyncError('save profile', e));
     },
     [reportSyncError]
+  );
+
+  const handleProfileChange = useCallback(
+    (nextProfile) => {
+      const cleaned = normalizeProfile(nextProfile);
+      setProfile(cleaned);
+      persistProfile(cleaned);
+    },
+    [persistProfile]
   );
 
   // ── Per-row mutations ─────────────────────────────────────────────────────
@@ -400,8 +413,9 @@ function AppContent() {
     // silently overwrite legacy local data. Closing the sheet is enough.
     setTasks([]);
     setSubjects([]);
-    setUserName('');
+    setProfile(normalizeProfile());
     setSettingsVisible(false);
+    setFriendsVisible(false);
     setLoading(false);
   }, []);
 
@@ -446,7 +460,7 @@ function AppContent() {
 
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>{greeting(userName || 'Student')}</Text>
+          <Text style={styles.greeting}>{greeting(publicName(profile))}</Text>
           <Text style={styles.headerTitle}>Your tasks</Text>
         </View>
         <Pressable
@@ -457,22 +471,6 @@ function AppContent() {
         >
           <Text style={styles.iconBtnText}>🆕</Text>
           {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
-        </Pressable>
-        <Pressable
-          onPress={() => setSettingsVisible(true)}
-          style={[styles.iconBtn, { marginLeft: spacing.sm }]}
-          hitSlop={8}
-          accessibilityLabel="Settings"
-        >
-          <Text style={styles.iconBtnText}>⚙️</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setSubjectMgrVisible(true)}
-          style={[styles.iconBtn, { marginLeft: spacing.sm }]}
-          hitSlop={8}
-          accessibilityLabel="Manage subjects"
-        >
-          <Text style={styles.iconBtnText}>📚</Text>
         </Pressable>
       </View>
 
@@ -508,7 +506,15 @@ function AppContent() {
         }
       />
 
-      <AddTaskFab onPress={openNewTask} styles={styles} shadow={shadow} />
+      <BottomActionBar
+        profile={profile}
+        onProfile={() => setSettingsVisible(true)}
+        onAddTask={openNewTask}
+        onSubjects={() => setSubjectMgrVisible(true)}
+        onFriends={() => setFriendsVisible(true)}
+        styles={styles}
+        shadow={shadow}
+      />
 
       <TaskForm
         visible={formVisible}
@@ -544,11 +550,8 @@ function AppContent() {
       <SettingsSheet
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
-        userName={userName}
-        onNameChange={(name) => {
-          setUserName(name);
-          persistUserName(name);
-        }}
+        profile={profile}
+        onProfileChange={handleProfileChange}
         session={session}
         onSignOut={handleSignOut}
         onShowChangelog={() => {
@@ -556,6 +559,12 @@ function AppContent() {
           // Defer so the settings sheet can finish dismissing first.
           setTimeout(openChangelog, 250);
         }}
+      />
+
+      <FriendsSheet
+        visible={friendsVisible}
+        onClose={() => setFriendsVisible(false)}
+        session={session}
       />
 
       <ChangelogSheet
@@ -591,45 +600,61 @@ function VersionBadge({ styles }) {
   );
 }
 
-function AddTaskFab({ onPress, styles, shadow }) {
-  // Lazy-init via useRef(null) so a fresh Animated.Value isn't allocated and
-  // discarded on every re-render.
-  const scaleRef = useRef(null);
-  if (scaleRef.current == null) scaleRef.current = new Animated.Value(1);
-  const scale = scaleRef.current;
-
-  const start = () => {
-    Animated.timing(scale, {
-      toValue: 1.6,
-      duration: 450,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const end = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      bounciness: 10,
-      speed: 14,
-    }).start();
-  };
-
+function BottomActionBar({
+  profile,
+  onProfile,
+  onAddTask,
+  onSubjects,
+  onFriends,
+  styles,
+  shadow,
+}) {
   return (
-    <View style={styles.fabWrap} pointerEvents="box-none">
-      <Animated.View style={{ transform: [{ scale }] }}>
-        <Pressable
-          onPress={onPress}
-          onPressIn={start}
-          onPressOut={end}
-          accessibilityLabel="Add task"
-          accessibilityRole="button"
-          style={[styles.fab, shadow.float]}
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </Pressable>
-      </Animated.View>
+    <View style={[styles.bottomBar, shadow.float]}>
+      <BarButton
+        label="Profile"
+        accessibilityLabel="Open profile"
+        onPress={onProfile}
+        styles={styles}
+        avatar={<ProfileAvatar profile={profile} size={30} />}
+      />
+      <BarButton
+        label="Subjects"
+        icon="📚"
+        accessibilityLabel="Manage subjects"
+        onPress={onSubjects}
+        styles={styles}
+      />
+      <Pressable
+        onPress={onAddTask}
+        accessibilityLabel="Add task"
+        accessibilityRole="button"
+        style={styles.bottomAddBtn}
+      >
+        <Text style={styles.bottomAddIcon}>+</Text>
+      </Pressable>
+      <BarButton
+        label="Friends"
+        icon="👥"
+        accessibilityLabel="Open friends"
+        onPress={onFriends}
+        styles={styles}
+      />
     </View>
+  );
+}
+
+function BarButton({ label, icon, avatar, onPress, accessibilityLabel, styles }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      style={styles.bottomBarBtn}
+    >
+      {avatar || <Text style={styles.bottomBarIcon}>{icon}</Text>}
+      <Text style={styles.bottomBarLabel} numberOfLines={1}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -858,26 +883,52 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     listContent: {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.xs,
-      paddingBottom: 120,
+      paddingBottom: 136,
       flexGrow: 1,
     },
-    fabWrap: {
+    bottomBar: {
       position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: spacing.xl,
+      left: spacing.lg,
+      right: spacing.lg,
+      bottom: spacing.md,
+      minHeight: 72,
+      borderRadius: radius.xl,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      gap: spacing.sm,
+    },
+    bottomBarBtn: {
+      width: 82,
+      height: 56,
+      borderRadius: radius.md,
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 3,
     },
-    fab: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+    bottomBarIcon: {
+      fontSize: 22,
+      lineHeight: 26,
+    },
+    bottomBarLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: '800',
+    },
+    bottomAddBtn: {
+      width: 58,
+      height: 58,
+      borderRadius: radius.pill,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    fabIcon: {
+    bottomAddIcon: {
       color: '#fff',
       fontSize: 32,
       fontWeight: '300',
@@ -886,7 +937,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     versionBadge: {
       position: 'absolute',
       left: spacing.md,
-      bottom: spacing.md,
+      bottom: 96,
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: radius.sm,

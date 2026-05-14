@@ -60,7 +60,7 @@ Copy the example env file and add your Supabase project values:
 Copy-Item .env.local.example .env.local
 ```
 
-Then run the SQL in `supabase-setup.sql` inside the Supabase SQL Editor. It creates `profiles`, `subjects`, and `tasks`, enables row-level security, and adds per-user policies.
+Then run the SQL in `supabase-setup.sql` inside the Supabase SQL Editor. It creates `profiles`, `friends`, `subjects`, and `tasks`, enables row-level security, and adds per-user policies.
 
 Start the app:
 
@@ -72,7 +72,8 @@ npm run web
 
 Supabase stores user-owned rows:
 
-- `profiles`: display name, selected theme, custom themes.
+- `profiles`: display name, username, avatar, selected theme, custom themes.
+- `friends`: each user's saved friend list.
 - `subjects`: subject name, room, teacher, color.
 - `tasks`: task title, description, subject name, due date, completion state, created timestamp.
 

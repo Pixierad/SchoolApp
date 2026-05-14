@@ -9,7 +9,7 @@
 //     render instantly on boot.
 //
 // Callers import the top-level helpers (loadTasks, upsertTask, deleteTask,
-// loadSubjects, upsertSubject, deleteSubject, loadUserName, saveUserName)
+// loadSubjects, upsertSubject, deleteSubject, loadProfile, saveProfile, ...)
 // and don't need to care which backend is active. App.js picks up an auth
 // state listener to re-load when the user signs in/out.
 //
@@ -27,6 +27,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured, currentUserId } from './supabase';
+import { DEFAULT_AVATAR_EMOJI, normalizeProfile } from './profile';
 
 // ── Local keys ─────────────────────────────────────────────────────────────
 // The legacy keys (no user id) are preserved so existing local-only data
@@ -34,6 +35,7 @@ import { supabase, isSupabaseConfigured, currentUserId } from './supabase';
 const LEGACY_TASKS_KEY = '@simpleapp:tasks:v1';
 const LEGACY_SUBJECTS_KEY = '@simpleapp:subjects:v1';
 const LEGACY_USER_NAME_KEY = '@simpleapp:userName:v1';
+const PROFILE_KEY_PREFIX = '@simpleapp:profile:';
 const MIGRATION_FLAG_PREFIX = '@simpleapp:migrated:';
 const PENDING_WRITES_PREFIX = '@simpleapp:pendingWrites:';
 
@@ -45,6 +47,9 @@ function subjectsKey(userId) {
 }
 function userNameKey(userId) {
   return userId ? `@simpleapp:userName:${userId}:v1` : LEGACY_USER_NAME_KEY;
+}
+function profileKey(userId) {
+  return userId ? `${PROFILE_KEY_PREFIX}${userId}:v1` : `${PROFILE_KEY_PREFIX}local:v1`;
 }
 function pendingWritesKey(userId) {
   return `${PENDING_WRITES_PREFIX}${userId}:v1`;
@@ -137,6 +142,27 @@ function rowToSubject(r) {
   };
 }
 
+function profileToRow(profile, userId) {
+  const cleaned = normalizeProfile(profile);
+  return {
+    id: userId,
+    name: cleaned.name,
+    username: cleaned.username || null,
+    avatar_type: cleaned.avatarType,
+    avatar_value: cleaned.avatarValue || DEFAULT_AVATAR_EMOJI,
+  };
+}
+
+function rowToProfile(r, fallbackId = null) {
+  return normalizeProfile({
+    id: r?.id ?? fallbackId,
+    name: r?.name ?? '',
+    username: r?.username ?? '',
+    avatarType: r?.avatar_type ?? r?.avatarType ?? 'emoji',
+    avatarValue: r?.avatar_value ?? r?.avatarValue ?? DEFAULT_AVATAR_EMOJI,
+  });
+}
+
 // ── Local cache helpers ────────────────────────────────────────────────────
 
 async function readLocalArray(key) {
@@ -156,6 +182,26 @@ async function writeLocalArray(key, arr) {
     await AsyncStorage.setItem(key, JSON.stringify(arr));
   } catch (e) {
     console.warn('Failed to write local array:', e);
+  }
+}
+
+async function readLocalObject(key) {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch (e) {
+    console.warn('Failed to read local object:', e);
+    return null;
+  }
+}
+
+async function writeLocalObject(key, obj) {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(obj));
+  } catch (e) {
+    console.warn('Failed to write local object:', e);
   }
 }
 
@@ -226,6 +272,13 @@ async function applyPendingWrite(uid, op) {
       const { error } = await supabase
         .from('profiles')
         .upsert({ id: uid, name: op.name ?? '' }, { onConflict: 'id' });
+      if (error) throw error;
+      return;
+    }
+    case 'saveProfile': {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(profileToRow(op.profile, uid), { onConflict: 'id' });
       if (error) throw error;
       return;
     }
@@ -568,7 +621,7 @@ async function updateLocalSubjectCache(uid, mutator) {
 
 // ── User name (profile) ────────────────────────────────────────────────────
 
-export async function loadUserName() {
+export async function loadProfile() {
   const uid = await cloudMode();
 
   if (uid) {
@@ -581,53 +634,120 @@ export async function loadUserName() {
       // first saveUserName() call will then create the row via upsert.
       const { data, error } = await supabase
         .from('profiles')
-        .select('name')
+        .select('id, name, username, avatar_type, avatar_value')
         .eq('id', uid)
         .maybeSingle();
       if (error) throw error;
-      const name = data?.name ?? '';
-      AsyncStorage.setItem(userNameKey(uid), name).catch(() => {});
-      return name;
+      const profile = rowToProfile(data, uid);
+      AsyncStorage.setItem(userNameKey(uid), profile.name).catch(() => {});
+      writeLocalObject(profileKey(uid), profile).catch(() => {});
+      return profile;
     } catch (e) {
-      console.warn('Supabase loadUserName failed, falling back to cache:', e?.message);
+      console.warn('Supabase loadProfile failed, falling back to cache:', e?.message);
       try {
-        return (await AsyncStorage.getItem(userNameKey(uid))) ?? '';
+        const cached = await readLocalObject(profileKey(uid));
+        if (cached) return rowToProfile(cached, uid);
+        const name = (await AsyncStorage.getItem(userNameKey(uid))) ?? '';
+        return rowToProfile({ id: uid, name }, uid);
       } catch {
-        return '';
+        return rowToProfile({ id: uid }, uid);
       }
     }
   }
 
   try {
-    return (await AsyncStorage.getItem(userNameKey(null))) ?? '';
+    const cached = await readLocalObject(profileKey(null));
+    if (cached) return rowToProfile(cached, null);
+    const name = (await AsyncStorage.getItem(userNameKey(null))) ?? '';
+    return rowToProfile({ name }, null);
   } catch (e) {
-    console.warn('Failed to load user name:', e);
-    return '';
+    console.warn('Failed to load profile:', e);
+    return rowToProfile({}, null);
   }
 }
 
-export async function saveUserName(name) {
+export async function saveProfile(profile) {
   const uid = await cloudMode();
+  const cleaned = normalizeProfile(profile);
 
   if (uid) {
-    AsyncStorage.setItem(userNameKey(uid), name).catch(() => {});
+    const withId = { ...cleaned, id: uid };
+    AsyncStorage.setItem(userNameKey(uid), cleaned.name).catch(() => {});
+    writeLocalObject(profileKey(uid), withId).catch(() => {});
     return runQueued(async () => {
       try {
         const { error } = await supabase
           .from('profiles')
-          .upsert({ id: uid, name }, { onConflict: 'id' });
+          .upsert(profileToRow(cleaned, uid), { onConflict: 'id' });
         if (error) throw error;
       } catch (e) {
-        return queueIfOffline(uid, { type: 'saveUserName', name }, e);
+        return queueIfOffline(uid, { type: 'saveProfile', profile: cleaned }, e);
       }
     });
   }
 
   try {
-    await AsyncStorage.setItem(userNameKey(null), name);
+    await AsyncStorage.setItem(userNameKey(null), cleaned.name);
+    await writeLocalObject(profileKey(null), cleaned);
   } catch (e) {
-    console.warn('Failed to save user name:', e);
+    console.warn('Failed to save profile:', e);
   }
+}
+
+export async function loadUserName() {
+  const profile = await loadProfile();
+  return profile.name;
+}
+
+export async function saveUserName(name) {
+  const profile = await loadProfile();
+  return saveProfile({ ...profile, name });
+}
+
+export async function searchProfiles(query) {
+  const uid = await cloudMode();
+  const term = String(query || '').trim();
+  if (!uid || term.length < 2) return [];
+
+  const { data, error } = await supabase.rpc('search_profiles', { search_term: term });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    ...rowToProfile(row, row.id),
+    isFriend: !!row.is_friend,
+  }));
+}
+
+export async function loadFriends() {
+  const uid = await cloudMode();
+  if (!uid) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('list_friends');
+    if (error) throw error;
+    const friends = (data || []).map((row) => ({
+      ...rowToProfile(row, row.id),
+      friendedAt: row.friended_at ?? null,
+    }));
+    writeLocalArray(`@simpleapp:friends:${uid}:v1`, friends).catch(() => {});
+    return friends;
+  } catch (e) {
+    console.warn('Supabase loadFriends failed, falling back to cache:', e?.message);
+    return readLocalArray(`@simpleapp:friends:${uid}:v1`);
+  }
+}
+
+export async function addFriend(friendId) {
+  const uid = await cloudMode();
+  if (!uid || !friendId || friendId === uid) return;
+  const { error } = await supabase.rpc('add_friend', { friend_profile_id: friendId });
+  if (error) throw error;
+}
+
+export async function removeFriend(friendId) {
+  const uid = await cloudMode();
+  if (!uid || !friendId) return;
+  const { error } = await supabase.rpc('remove_friend', { friend_profile_id: friendId });
+  if (error) throw error;
 }
 
 // ── Changelog (last-seen version) ─────────────────────────────────────────

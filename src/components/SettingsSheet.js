@@ -21,6 +21,8 @@ import {
   isValidHex,
   softFromPrimary,
 } from '../theme';
+import { AVATAR_EMOJIS, isValidUsername, normalizeProfile, normalizeUsername } from '../profile';
+import ProfileAvatar from './ProfileAvatar';
 
 // A palette of pickable primary colors for the custom-theme builder. Users
 // can also type a hex code manually.
@@ -36,6 +38,8 @@ const CUSTOM_COLOR_OPTIONS = [
 export default function SettingsSheet({
   visible,
   onClose,
+  profile,
+  onProfileChange,
   userName = '',
   onNameChange,
   session = null,
@@ -61,24 +65,65 @@ export default function SettingsSheet({
   );
 
   // Local draft — synced from prop each time the sheet opens.
-  // Saved (via onNameChange) when the user taps Done or dismisses the sheet.
-  const [draftName, setDraftName] = useState(userName);
+  // Saved when the user taps Done or dismisses the sheet.
+  const resolvedProfile = normalizeProfile(profile || { name: userName });
+  const [draftName, setDraftName] = useState(resolvedProfile.name);
+  const [draftUsername, setDraftUsername] = useState(resolvedProfile.username);
+  const [draftAvatarType, setDraftAvatarType] = useState(resolvedProfile.avatarType);
+  const [draftAvatarValue, setDraftAvatarValue] = useState(resolvedProfile.avatarValue);
+  const [profileError, setProfileError] = useState(null);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
-      setDraftName(userName);
+      setDraftName(resolvedProfile.name);
+      setDraftUsername(resolvedProfile.username);
+      setDraftAvatarType(resolvedProfile.avatarType);
+      setDraftAvatarValue(resolvedProfile.avatarValue);
+      setProfileError(null);
       setBuilderOpen(false);
     }
-  }, [visible, userName]);
+  }, [
+    visible,
+    resolvedProfile.name,
+    resolvedProfile.username,
+    resolvedProfile.avatarType,
+    resolvedProfile.avatarValue,
+  ]);
 
-  const commitName = () => {
-    const trimmed = draftName.trim();
-    if (trimmed !== userName) onNameChange?.(trimmed);
+  const commitProfile = (patch = {}) => {
+    const next = normalizeProfile({
+      ...resolvedProfile,
+      name: draftName.trim(),
+      username: normalizeUsername(draftUsername),
+      avatarType: draftAvatarType,
+      avatarValue: draftAvatarValue,
+      ...patch,
+    });
+    if (!isValidUsername(next.username)) {
+      setProfileError('Username must be at least 3 characters.');
+      return false;
+    }
+    setProfileError(null);
+    const changed =
+      next.name !== resolvedProfile.name ||
+      next.username !== resolvedProfile.username ||
+      next.avatarType !== resolvedProfile.avatarType ||
+      next.avatarValue !== resolvedProfile.avatarValue;
+    if (changed) {
+      if (onProfileChange) onProfileChange(next);
+      else onNameChange?.(next.name);
+    }
+    return true;
   };
+  const commitProfileRef = useRef(commitProfile);
+  useEffect(() => {
+    commitProfileRef.current = commitProfile;
+  }, [commitProfile]);
 
   const handleClose = () => {
-    commitName();
+    if (!commitProfile()) return;
     onClose();
   };
 
@@ -90,7 +135,7 @@ export default function SettingsSheet({
   const translateY = translateYRef.current;
 
   // Track mount state -- the dismiss animation has a 200ms continuation
-  // and we don't want it to fire commitName/onClose against an unmounted
+  // and we don't want it to fire commitProfile/onClose against an unmounted
   // tree.
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -135,8 +180,7 @@ export default function SettingsSheet({
             useNativeDriver: true,
           }).start(() => {
             if (!mountedRef.current) return;
-            commitName();
-            onClose();
+            if (commitProfileRef.current()) onClose();
           });
         } else {
           Animated.spring(translateY, {
@@ -163,6 +207,41 @@ export default function SettingsSheet({
     ]);
   };
 
+  const setAvatar = (avatarType, avatarValue) => {
+    setDraftAvatarType(avatarType);
+    setDraftAvatarValue(avatarValue);
+    commitProfile({ avatarType, avatarValue });
+  };
+
+  const handleUploadPress = () => {
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click?.();
+      return;
+    }
+    Alert.alert('Upload image', 'Image upload is available when using SchoolApp on the web.');
+  };
+
+  const handleWebImageUpload = (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    if (file.size > 1500 * 1024) {
+      setProfileError('Choose an image under 1.5 MB.');
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      setAvatar('image', value);
+      event.target.value = '';
+    };
+    reader.onerror = () => {
+      setProfileError('Could not read that image.');
+      event.target.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
   const allThemeKeys = [...THEME_PRESET_KEYS, ...customThemes.map((t) => t.key)];
 
   return (
@@ -175,7 +254,7 @@ export default function SettingsSheet({
           <View style={styles.dragZone} {...panResponder.panHandlers}>
             <View style={styles.handle} />
             <View style={styles.header}>
-              <Text style={styles.title}>Settings</Text>
+              <Text style={styles.title}>Profile</Text>
               <Pressable onPress={handleClose} hitSlop={8}>
                 <Text style={styles.doneText}>Done</Text>
               </Pressable>
@@ -184,22 +263,86 @@ export default function SettingsSheet({
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-            {/* Your name */}
+            {/* Profile */}
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Your name</Text>
+              <Text style={styles.sectionLabel}>Profile</Text>
+              <View style={styles.profileTopRow}>
+                <ProfileAvatar
+                  profile={{
+                    ...resolvedProfile,
+                    avatarType: draftAvatarType,
+                    avatarValue: draftAvatarValue,
+                  }}
+                  size={76}
+                />
+                <View style={styles.avatarActions}>
+                  <Pressable onPress={handleUploadPress} style={styles.uploadBtn}>
+                    <Text style={styles.uploadBtnText}>Upload image</Text>
+                  </Pressable>
+                  {draftAvatarType === 'image' ? (
+                    <Pressable
+                      onPress={() => setAvatar('emoji', AVATAR_EMOJIS[0])}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>Use emoji</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+              {Platform.OS === 'web'
+                ? React.createElement('input', {
+                    ref: fileInputRef,
+                    type: 'file',
+                    accept: 'image/*',
+                    style: { display: 'none' },
+                    onChange: handleWebImageUpload,
+                  })
+                : null}
+              <View style={styles.emojiGrid}>
+                {AVATAR_EMOJIS.map((emoji) => {
+                  const selected = draftAvatarType === 'emoji' && draftAvatarValue === emoji;
+                  return (
+                    <Pressable
+                      key={emoji}
+                      onPress={() => setAvatar('emoji', emoji)}
+                      style={[styles.emojiOption, selected && styles.emojiOptionSelected]}
+                      accessibilityLabel={`Use ${emoji} as profile picture`}
+                    >
+                      <Text style={styles.emojiOptionText}>{emoji}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <TextInput
                 value={draftName}
                 onChangeText={setDraftName}
-                onBlur={commitName}
+                onBlur={() => commitProfile()}
                 placeholder="Enter your name"
                 placeholderTextColor={colors.textFaint}
                 style={styles.input}
                 returnKeyType="done"
                 autoCorrect={false}
               />
-              <Text style={styles.hint}>
-                Shown in the greeting at the top of the home screen.
-              </Text>
+              <View style={styles.usernameRow}>
+                <Text style={styles.usernamePrefix}>@</Text>
+                <TextInput
+                  value={draftUsername}
+                  onChangeText={(value) => setDraftUsername(normalizeUsername(value))}
+                  onBlur={() => commitProfile()}
+                  placeholder="username"
+                  placeholderTextColor={colors.textFaint}
+                  style={[styles.input, styles.usernameInput]}
+                  returnKeyType="done"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={24}
+                />
+              </View>
+              {profileError ? (
+                <View style={styles.profileErrorBox}>
+                  <Text style={styles.profileErrorText}>{profileError}</Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Theme gallery */}
@@ -645,6 +788,92 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.md,
       fontSize: 16,
       color: colors.text,
+    },
+    profileTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    avatarActions: {
+      flex: 1,
+      gap: spacing.sm,
+      alignItems: 'flex-start',
+    },
+    uploadBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    uploadBtnText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    secondaryBtn: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    secondaryBtnText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    emojiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    emojiOption: {
+      width: 42,
+      height: 42,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emojiOptionSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    emojiOptionText: {
+      fontSize: 22,
+      lineHeight: 26,
+    },
+    usernameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    usernamePrefix: {
+      paddingLeft: spacing.md,
+      color: colors.textMuted,
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    usernameInput: {
+      flex: 1,
+      borderWidth: 0,
+      backgroundColor: 'transparent',
+      paddingLeft: spacing.xs,
+    },
+    profileErrorBox: {
+      backgroundColor: colors.dangerSoft,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    profileErrorText: {
+      color: colors.danger,
+      fontSize: 14,
+      fontWeight: '700',
     },
 
     // Segmented control

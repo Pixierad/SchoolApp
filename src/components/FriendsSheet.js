@@ -1,0 +1,400 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Modal,
+  StyleSheet,
+  ScrollView,
+  Animated,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
+
+import { useTheme } from '../theme';
+import { addFriend, loadFriends, removeFriend, searchProfiles } from '../storage';
+import { publicName } from '../profile';
+import ProfileAvatar from './ProfileAvatar';
+
+export default function FriendsSheet({ visible, onClose, session = null }) {
+  const { colors, spacing, radius, typography, shadow } = useTheme();
+  const styles = useMemo(
+    () => makeStyles({ colors, spacing, radius, typography }),
+    [colors, spacing, radius, typography]
+  );
+
+  const [query, setQuery] = useState('');
+  const [friends, setFriends] = useState([]);
+  const [results, setResults] = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const canUseFriends = !!session;
+  const screenHeight = Dimensions.get('window').height;
+  const translateYRef = useRef(null);
+  if (translateYRef.current == null) translateYRef.current = new Animated.Value(screenHeight);
+  const translateY = translateYRef.current;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(screenHeight);
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 20,
+      }).start();
+    }
+  }, [visible, translateY, screenHeight]);
+
+  useEffect(() => {
+    if (!visible) return;
+    setQuery('');
+    setResults([]);
+    setMessage(null);
+    if (!canUseFriends) {
+      setFriends([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingFriends(true);
+    loadFriends()
+      .then((items) => {
+        if (!cancelled) setFriends(items);
+      })
+      .catch((e) => {
+        if (!cancelled) setMessage(e?.message || 'Could not load friends.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFriends(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, canUseFriends]);
+
+  useEffect(() => {
+    if (!visible || !canUseFriends) return;
+    const term = query.trim();
+    if (term.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearching(true);
+    const id = setTimeout(() => {
+      searchProfiles(term)
+        .then((items) => {
+          if (!cancelled) setResults(items);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setResults([]);
+            setMessage(e?.message || 'Search failed.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [query, visible, canUseFriends]);
+
+  const handleAdd = async (person) => {
+    if (!person?.id || busyId) return;
+    setBusyId(person.id);
+    setMessage(null);
+    try {
+      await addFriend(person.id);
+      setResults((prev) =>
+        prev.map((item) => (item.id === person.id ? { ...item, isFriend: true } : item))
+      );
+      const nextFriends = await loadFriends();
+      setFriends(nextFriends);
+    } catch (e) {
+      setMessage(e?.message || 'Could not add friend.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRemove = async (person) => {
+    if (!person?.id || busyId) return;
+    setBusyId(person.id);
+    setMessage(null);
+    try {
+      await removeFriend(person.id);
+      setFriends((prev) => prev.filter((item) => item.id !== person.id));
+      setResults((prev) =>
+        prev.map((item) => (item.id === person.id ? { ...item, isFriend: false } : item))
+      );
+    } catch (e) {
+      setMessage(e?.message || 'Could not remove friend.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={styles.backdropFill} onPress={onClose} />
+        <Animated.View style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title}>Friends</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={styles.doneText}>Done</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            {!canUseFriends ? (
+              <View style={styles.notice}>
+                <Text style={styles.noticeTitle}>Friend search needs an account</Text>
+                <Text style={styles.noticeText}>
+                  Sign in with cloud sync to find classmates by name or username.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Find people</Text>
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search name or username"
+                    placeholderTextColor={colors.textFaint}
+                    style={styles.input}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searching ? <ActivityIndicator color={colors.primary} /> : null}
+                  {message ? (
+                    <View style={styles.errorBox}>
+                      <Text style={styles.errorText}>{message}</Text>
+                    </View>
+                  ) : null}
+                  {results.map((person) => (
+                    <FriendRow
+                      key={person.id}
+                      person={person}
+                      busy={busyId === person.id}
+                      actionLabel={person.isFriend ? 'Added' : 'Add'}
+                      disabled={person.isFriend}
+                      onPress={() => handleAdd(person)}
+                      styles={styles}
+                    />
+                  ))}
+                  {query.trim().length >= 2 && !searching && results.length === 0 ? (
+                    <Text style={styles.emptyText}>No matching profiles yet.</Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Your friends</Text>
+                  {loadingFriends ? <ActivityIndicator color={colors.primary} /> : null}
+                  {!loadingFriends && friends.length === 0 ? (
+                    <Text style={styles.emptyText}>Friends you add will show up here.</Text>
+                  ) : null}
+                  {friends.map((person) => (
+                    <FriendRow
+                      key={person.id}
+                      person={person}
+                      busy={busyId === person.id}
+                      actionLabel="Remove"
+                      danger
+                      onPress={() => handleRemove(person)}
+                      styles={styles}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+function FriendRow({ person, busy, actionLabel, disabled, danger, onPress, styles }) {
+  const name = publicName(person);
+  const username = person.username ? `@${person.username}` : 'No username';
+
+  return (
+    <View style={styles.friendRow}>
+      <ProfileAvatar profile={person} size={42} />
+      <View style={styles.friendText}>
+        <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.friendUsername} numberOfLines={1}>{username}</Text>
+      </View>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || busy}
+        style={[
+          styles.friendAction,
+          danger && styles.friendActionDanger,
+          (disabled || busy) && styles.friendActionDisabled,
+        ]}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" />
+        ) : (
+          <Text style={[styles.friendActionText, danger && styles.friendActionDangerText]}>
+            {actionLabel}
+          </Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+const makeStyles = ({ colors, spacing, radius, typography }) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    backdropFill: { ...StyleSheet.absoluteFillObject },
+    sheet: {
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '88%',
+      paddingBottom: spacing.lg,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.borderStrong,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+    },
+    title: {
+      ...typography.title,
+      fontSize: 22,
+    },
+    doneText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    content: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+      gap: spacing.xl,
+    },
+    section: {
+      gap: spacing.sm,
+    },
+    sectionLabel: {
+      ...typography.label,
+      textTransform: 'uppercase',
+      marginBottom: spacing.xs,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      fontSize: 16,
+      color: colors.text,
+    },
+    notice: {
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.lg,
+      gap: spacing.xs,
+    },
+    noticeTitle: {
+      ...typography.subheading,
+    },
+    noticeText: {
+      ...typography.bodyMuted,
+    },
+    errorBox: {
+      backgroundColor: colors.dangerSoft,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    errorText: {
+      color: colors.danger,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    emptyText: {
+      ...typography.bodyMuted,
+      paddingVertical: spacing.sm,
+    },
+    friendRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: spacing.md,
+    },
+    friendText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    friendName: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    friendUsername: {
+      color: colors.textMuted,
+      fontSize: 13,
+      marginTop: 2,
+    },
+    friendAction: {
+      minWidth: 74,
+      minHeight: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      paddingHorizontal: spacing.md,
+    },
+    friendActionDanger: {
+      backgroundColor: colors.dangerSoft,
+    },
+    friendActionDisabled: {
+      opacity: 0.55,
+    },
+    friendActionText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    friendActionDangerText: {
+      color: colors.danger,
+    },
+  });
