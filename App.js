@@ -34,6 +34,7 @@ import TaskCard from './src/components/TaskCard';
 import TaskForm from './src/components/TaskForm';
 import SubjectManager from './src/components/SubjectManager';
 import SettingsSheet from './src/components/SettingsSheet';
+import ProfileSheet from './src/components/ProfileSheet';
 import FilterTabs from './src/components/FilterTabs';
 import EmptyState from './src/components/EmptyState';
 import AuthScreen from './src/components/AuthScreen';
@@ -73,6 +74,7 @@ function AppContent() {
   const [editingTask, setEditingTask] = useState(null);
   const [formVisible, setFormVisible] = useState(false);
   const [subjectMgrVisible, setSubjectMgrVisible] = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [friendsVisible, setFriendsVisible] = useState(false);
   const [changelogVisible, setChangelogVisible] = useState(false);
@@ -414,6 +416,7 @@ function AppContent() {
     setTasks([]);
     setSubjects([]);
     setProfile(normalizeProfile());
+    setProfileVisible(false);
     setSettingsVisible(false);
     setFriendsVisible(false);
     setLoading(false);
@@ -508,10 +511,11 @@ function AppContent() {
 
       <BottomActionBar
         profile={profile}
-        onProfile={() => setSettingsVisible(true)}
+        onProfile={() => setProfileVisible(true)}
         onAddTask={openNewTask}
         onSubjects={() => setSubjectMgrVisible(true)}
         onFriends={() => setFriendsVisible(true)}
+        onSettings={() => setSettingsVisible(true)}
         styles={styles}
         shadow={shadow}
       />
@@ -547,11 +551,16 @@ function AppContent() {
         }}
         taskCountsBySubject={taskCountsBySubject}
       />
+      <ProfileSheet
+        visible={profileVisible}
+        onClose={() => setProfileVisible(false)}
+        profile={profile}
+        onProfileChange={handleProfileChange}
+      />
+
       <SettingsSheet
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
-        profile={profile}
-        onProfileChange={handleProfileChange}
         session={session}
         onSignOut={handleSignOut}
         onShowChangelog={() => {
@@ -606,6 +615,7 @@ function BottomActionBar({
   onAddTask,
   onSubjects,
   onFriends,
+  onSettings,
   styles,
   shadow,
 }) {
@@ -638,6 +648,13 @@ function BottomActionBar({
         icon="👥"
         accessibilityLabel="Open friends"
         onPress={onFriends}
+        styles={styles}
+      />
+      <BarButton
+        label="Settings"
+        icon="⚙️"
+        accessibilityLabel="Open settings"
+        onPress={onSettings}
         styles={styles}
       />
     </View>
@@ -901,10 +918,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-around',
-      gap: spacing.sm,
+      gap: spacing.xs,
     },
     bottomBarBtn: {
-      width: 82,
+      flex: 1,
+      minWidth: 0,
+      maxWidth: 82,
       height: 56,
       borderRadius: radius.md,
       alignItems: 'center',
