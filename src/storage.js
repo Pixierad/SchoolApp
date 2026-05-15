@@ -750,9 +750,162 @@ export async function removeFriend(friendId) {
   if (error) throw error;
 }
 
-// ── Changelog (last-seen version) ─────────────────────────────────────────
-// Used by the in-app changelog to decide whether to show an "unread" dot.
+// Chat rooms
+
+const CHAT_CACHE_PREFIX = '@simpleapp:chats:';
+const CHAT_MESSAGES_CACHE_PREFIX = '@simpleapp:chatMessages:';
+
+function chatRoomsKey(userId) {
+  return `${CHAT_CACHE_PREFIX}${userId}:v1`;
+}
+
+function chatMessagesKey(userId, roomId) {
+  return `${CHAT_MESSAGES_CACHE_PREFIX}${userId}:${roomId}:v1`;
+}
+
+function rowToChatRoom(row) {
+  return {
+    id: row.id,
+    name: row.name ?? '',
+    createdBy: row.created_by ?? null,
+    createdAt: row.created_at ?? null,
+    expiresAt: row.expires_at ?? null,
+    isPinned: !!row.is_pinned,
+    lastReadAt: row.last_read_at ?? null,
+    lastMessageBody: row.last_message_body ?? null,
+    lastMessageAt: row.last_message_at ?? null,
+    unreadCount: Number(row.unread_count ?? 0),
+    members: Array.isArray(row.members)
+      ? row.members.map((m) => rowToProfile(m, m?.id))
+      : [],
+  };
+}
+
+function rowToChatMessage(row) {
+  return {
+    id: row.id,
+    roomId: row.room_id,
+    senderId: row.sender_id,
+    body: row.body ?? '',
+    createdAt: row.created_at ?? null,
+    sender: rowToProfile(
+      {
+        id: row.sender_id,
+        name: row.sender_name,
+        username: row.sender_username,
+        avatar_type: row.sender_avatar_type,
+        avatar_value: row.sender_avatar_value,
+      },
+      row.sender_id
+    ),
+  };
+}
+
+export async function loadChatRooms() {
+  const uid = await cloudMode();
+  if (!uid) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('list_chat_rooms');
+    if (error) throw error;
+    const rooms = (data || []).map(rowToChatRoom);
+    writeLocalArray(chatRoomsKey(uid), rooms).catch(() => {});
+    return rooms;
+  } catch (e) {
+    console.warn('Supabase loadChatRooms failed, falling back to cache:', e?.message);
+    return readLocalArray(chatRoomsKey(uid));
+  }
+}
+
+export async function createChatRoom({ name, friendIds, lifetimeHours }) {
+  const uid = await cloudMode();
+  if (!uid) throw new Error('Sign in to create chats.');
+  const { data, error } = await supabase.rpc('create_chat_room', {
+    room_name: String(name || '').trim(),
+    friend_ids: Array.isArray(friendIds) ? friendIds : [],
+    lifetime_hours: Number(lifetimeHours) || 24,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function loadChatMessages(roomId) {
+  const uid = await cloudMode();
+  if (!uid || !roomId) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('list_chat_messages', {
+      room_profile_id: roomId,
+    });
+    if (error) throw error;
+    const messages = (data || []).map(rowToChatMessage);
+    writeLocalArray(chatMessagesKey(uid, roomId), messages).catch(() => {});
+    return messages;
+  } catch (e) {
+    console.warn('Supabase loadChatMessages failed, falling back to cache:', e?.message);
+    return readLocalArray(chatMessagesKey(uid, roomId));
+  }
+}
+
+export async function sendChatMessage(roomId, body) {
+  const uid = await cloudMode();
+  if (!uid || !roomId) return null;
+  const { data, error } = await supabase.rpc('send_chat_message', {
+    room_profile_id: roomId,
+    message_body: String(body || ''),
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function markChatRead(roomId) {
+  const uid = await cloudMode();
+  if (!uid || !roomId) return;
+  const { error } = await supabase.rpc('mark_chat_read', { room_profile_id: roomId });
+  if (error) throw error;
+}
+
+export async function setChatPinned(roomId, pinned) {
+  const uid = await cloudMode();
+  if (!uid || !roomId) return;
+  const { error } = await supabase.rpc('set_chat_pinned', {
+    room_profile_id: roomId,
+    pinned: !!pinned,
+  });
+  if (error) throw error;
+}
+
+export async function hideChatRoom(roomId) {
+  const uid = await cloudMode();
+  if (!uid || !roomId) return;
+  const { error } = await supabase.rpc('hide_chat_room', { room_profile_id: roomId });
+  if (error) throw error;
+}
+
+export function subscribeToChatRoom(roomId, onChange) {
+  if (!supabase || !roomId || typeof onChange !== 'function') return () => {};
+  const channel = supabase
+    .channel(`chat-room-${roomId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `room_id=eq.${roomId}`,
+      },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
 const CHANGELOG_SEEN_KEY = '@simpleapp:changelog:lastSeen:v1';
+
+// Used by the in-app changelog to decide whether to show an "unread" dot.
 
 export async function loadChangelogLastSeen() {
   try {

@@ -40,6 +40,7 @@ import EmptyState from './src/components/EmptyState';
 import AuthScreen from './src/components/AuthScreen';
 import ChangelogSheet from './src/components/ChangelogSheet';
 import FriendsSheet from './src/components/FriendsSheet';
+import ChatSheet from './src/components/ChatSheet';
 import ProfileAvatar from './src/components/ProfileAvatar';
 
 export default function App() {
@@ -77,6 +78,7 @@ function AppContent() {
   const [profileVisible, setProfileVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [friendsVisible, setFriendsVisible] = useState(false);
+  const [chatsVisible, setChatsVisible] = useState(false);
   const [changelogVisible, setChangelogVisible] = useState(false);
   const [hasUnreadChangelog, setHasUnreadChangelog] = useState(false);
   const [syncError, setSyncError] = useState(null);
@@ -419,6 +421,7 @@ function AppContent() {
     setProfileVisible(false);
     setSettingsVisible(false);
     setFriendsVisible(false);
+    setChatsVisible(false);
     setLoading(false);
   }, []);
 
@@ -462,19 +465,29 @@ function AppContent() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <View style={styles.header}>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => setSettingsVisible(true)}
+            style={styles.iconBtn}
+            hitSlop={8}
+            accessibilityLabel="Open settings"
+          >
+            <Text style={styles.iconBtnText}>⚙️</Text>
+          </Pressable>
+          <Pressable
+            onPress={openChangelog}
+            style={styles.iconBtn}
+            hitSlop={8}
+            accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
+          >
+            <Text style={styles.iconBtnText}>📜</Text>
+            {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
+          </Pressable>
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting(publicName(profile))}</Text>
           <Text style={styles.headerTitle}>Your tasks</Text>
         </View>
-        <Pressable
-          onPress={openChangelog}
-          style={styles.iconBtn}
-          hitSlop={8}
-          accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
-        >
-          <Text style={styles.iconBtnText}>🆕</Text>
-          {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
-        </Pressable>
       </View>
 
       <ProgressCard progress={progress} styles={styles} />
@@ -515,7 +528,7 @@ function AppContent() {
         onAddTask={openNewTask}
         onSubjects={() => setSubjectMgrVisible(true)}
         onFriends={() => setFriendsVisible(true)}
-        onSettings={() => setSettingsVisible(true)}
+        onChats={() => setChatsVisible(true)}
         styles={styles}
         shadow={shadow}
       />
@@ -576,6 +589,12 @@ function AppContent() {
         session={session}
       />
 
+      <ChatSheet
+        visible={chatsVisible}
+        onClose={() => setChatsVisible(false)}
+        session={session}
+      />
+
       <ChangelogSheet
         visible={changelogVisible}
         entries={CHANGELOG}
@@ -615,7 +634,7 @@ function BottomActionBar({
   onAddTask,
   onSubjects,
   onFriends,
-  onSettings,
+  onChats,
   styles,
   shadow,
 }) {
@@ -651,10 +670,10 @@ function BottomActionBar({
         styles={styles}
       />
       <BarButton
-        label="Settings"
-        icon="⚙️"
-        accessibilityLabel="Open settings"
-        onPress={onSettings}
+        label="Chats"
+        icon="💬"
+        accessibilityLabel="Open chats"
+        onPress={onChats}
         styles={styles}
       />
     </View>
@@ -806,6 +825,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.md,
       paddingBottom: spacing.sm,
+      gap: spacing.md,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
     },
     greeting: {
       ...typography.caption,

@@ -17,6 +17,16 @@
 
 export const CHANGELOG = [
   {
+    version: '1.2.1',
+    date: '2026-05-15',
+    title: 'CHATROOMS!!!!',
+    notes: [
+      'New: Temporary chatrooms for real-time collaboration with friends',
+      'Improvement: Friends tab now shows online status',
+      'Improvement: Chatroom UI improvements and bug fixes',
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-05-14',
     title: 'Friends are cool lol',
