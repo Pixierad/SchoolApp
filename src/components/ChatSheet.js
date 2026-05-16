@@ -57,6 +57,7 @@ export default function ChatSheet({ visible, onClose, session = null }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [actionRoom, setActionRoom] = useState(null);
+  const [detailsRoom, setDetailsRoom] = useState(null);
 
   const canUseChats = !!session;
   const userId = session?.user?.id ?? null;
@@ -99,6 +100,7 @@ export default function ChatSheet({ visible, onClose, session = null }) {
     if (!visible) return;
     setMode('list');
     setActiveRoom(null);
+    setDetailsRoom(null);
     setMessages([]);
     setDraft('');
     setMessage(null);
@@ -235,9 +237,23 @@ export default function ChatSheet({ visible, onClose, session = null }) {
                 <Text style={styles.backText}>Back</Text>
               </Pressable>
             )}
-            <Text style={styles.title} numberOfLines={1}>
-              {mode === 'create' ? 'New chat' : mode === 'room' ? roomTitle(activeRoom, userId) : 'Chats'}
-            </Text>
+            {mode === 'room' ? (
+              <Pressable
+                onPress={() => setDetailsRoom(activeRoom)}
+                disabled={!activeRoom}
+                style={styles.titleButton}
+                accessibilityRole="button"
+                accessibilityLabel="Show chat details"
+              >
+                <Text style={styles.title} numberOfLines={1}>
+                  {roomTitle(activeRoom, userId)}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.title} numberOfLines={1}>
+                {mode === 'create' ? 'New chat' : 'Chats'}
+              </Text>
+            )}
             <Pressable onPress={onClose} hitSlop={8} style={styles.headerSide}>
               <Text style={styles.doneText}>Done</Text>
             </Pressable>
@@ -298,6 +314,15 @@ export default function ChatSheet({ visible, onClose, session = null }) {
             onCancel={() => setActionRoom(null)}
             onPin={() => handlePin(actionRoom)}
             onDelete={() => handleHide(actionRoom)}
+          />
+        ) : null}
+
+        {detailsRoom ? (
+          <ChatDetailsPanel
+            styles={styles}
+            room={detailsRoom}
+            userId={userId}
+            onClose={() => setDetailsRoom(null)}
           />
         ) : null}
       </View>
@@ -552,6 +577,52 @@ function ActionPanel({ styles, room, onCancel, onPin, onDelete }) {
   );
 }
 
+function ChatDetailsPanel({ styles, room, userId, onClose }) {
+  const participants = room?.members || [];
+  return (
+    <View style={styles.actionBackdrop}>
+      <Pressable style={styles.backdropFill} onPress={onClose} />
+      <View style={styles.detailsPanel}>
+        <View style={styles.detailsHeader}>
+          <Text style={styles.detailsTitle}>Chat details</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.detailsSection}>
+          <Text style={styles.sectionLabel}>Chat name</Text>
+          <Text style={styles.detailsValue}>{roomTitle(room, userId)}</Text>
+        </View>
+
+        <View style={styles.detailsSection}>
+          <Text style={styles.sectionLabel}>Participants</Text>
+          {participants.length === 0 ? (
+            <Text style={styles.emptyText}>No participants listed.</Text>
+          ) : (
+            participants.map((person) => (
+              <View key={person.id} style={styles.participantRow}>
+                <ProfileAvatar profile={person} size={34} />
+                <View style={styles.friendText}>
+                  <Text style={styles.friendName} numberOfLines={1}>{publicName(person)}</Text>
+                  <Text style={styles.friendUsername} numberOfLines={1}>
+                    {person.username ? `@${person.username}` : person.id === userId ? 'You' : 'Participant'}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.detailsSection}>
+          <Text style={styles.sectionLabel}>Expiry date</Text>
+          <Text style={styles.detailsValue}>{formatExpiryDate(room?.expiresAt)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function MessageBox({ styles, text }) {
   return (
     <View style={styles.errorBox}>
@@ -582,6 +653,20 @@ function expiresText(expiresAt) {
   const hours = Math.ceil(minutes / 60);
   if (hours < 48) return `Expires in ${hours}h`;
   return `Expires in ${Math.ceil(hours / 24)}d`;
+}
+
+function formatExpiryDate(expiresAt) {
+  if (!expiresAt) return 'No expiry date';
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return 'No expiry date';
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 const makeStyles = ({ colors, spacing, radius, typography }) =>
@@ -625,6 +710,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       flex: 1,
       fontSize: 22,
       textAlign: 'center',
+    },
+    titleButton: {
+      flex: 1,
+      minWidth: 0,
     },
     backText: {
       fontSize: 15,
@@ -1014,5 +1103,41 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
       fontSize: 15,
       fontWeight: '700',
+    },
+    detailsPanel: {
+      margin: spacing.lg,
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: spacing.lg,
+    },
+    detailsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    detailsTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    detailsSection: {
+      gap: spacing.sm,
+    },
+    detailsValue: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    participantRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+      padding: spacing.sm,
+      gap: spacing.sm,
     },
   });

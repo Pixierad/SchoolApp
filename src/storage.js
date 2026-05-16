@@ -714,6 +714,8 @@ export async function searchProfiles(query) {
   return (data || []).map((row) => ({
     ...rowToProfile(row, row.id),
     isFriend: !!row.is_friend,
+    incomingRequest: !!row.incoming_request,
+    outgoingRequest: !!row.outgoing_request,
   }));
 }
 
@@ -736,10 +738,57 @@ export async function loadFriends() {
   }
 }
 
+export async function loadFriendRequests() {
+  const uid = await cloudMode();
+  if (!uid) return { incoming: [], outgoing: [] };
+
+  try {
+    const { data, error } = await supabase.rpc('list_friend_requests');
+    if (error) throw error;
+    const items = (data || []).map((row) => ({
+      ...rowToProfile(row, row.id),
+      requesterId: row.requester_id ?? null,
+      addresseeId: row.addressee_id ?? null,
+      direction: row.direction ?? 'incoming',
+      createdAt: row.created_at ?? null,
+    }));
+    const grouped = {
+      incoming: items.filter((item) => item.direction === 'incoming'),
+      outgoing: items.filter((item) => item.direction === 'outgoing'),
+    };
+    writeLocalObject(`@simpleapp:friendRequests:${uid}:v1`, grouped).catch(() => {});
+    return grouped;
+  } catch (e) {
+    console.warn('Supabase loadFriendRequests failed, falling back to cache:', e?.message);
+    return (
+      (await readLocalObject(`@simpleapp:friendRequests:${uid}:v1`)) ||
+      { incoming: [], outgoing: [] }
+    );
+  }
+}
+
 export async function addFriend(friendId) {
   const uid = await cloudMode();
   if (!uid || !friendId || friendId === uid) return;
   const { error } = await supabase.rpc('add_friend', { friend_profile_id: friendId });
+  if (error) throw error;
+}
+
+export async function acceptFriendRequest(requesterId) {
+  const uid = await cloudMode();
+  if (!uid || !requesterId || requesterId === uid) return;
+  const { error } = await supabase.rpc('accept_friend_request', {
+    requester_profile_id: requesterId,
+  });
+  if (error) throw error;
+}
+
+export async function declineFriendRequest(requesterId) {
+  const uid = await cloudMode();
+  if (!uid || !requesterId || requesterId === uid) return;
+  const { error } = await supabase.rpc('decline_friend_request', {
+    requester_profile_id: requesterId,
+  });
   if (error) throw error;
 }
 
@@ -895,6 +944,53 @@ export function subscribeToChatRoom(roomId, onChange) {
         filter: `room_id=eq.${roomId}`,
       },
       () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToFriendRequests(userId, onChange) {
+  if (!supabase || !userId || typeof onChange !== 'function') return () => {};
+  const channel = supabase
+    .channel(`friend-requests-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'friend_requests',
+        filter: `addressee_id=eq.${userId}`,
+      },
+      (payload) => {
+        const next = payload?.new;
+        if (!next || next.status === 'pending') onChange(next || payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToChatNotifications(userId, onMessage) {
+  if (!supabase || !userId || typeof onMessage !== 'function') return () => {};
+  const channel = supabase
+    .channel(`chat-notifications-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+      },
+      (payload) => {
+        const row = payload?.new;
+        if (row?.sender_id && row.sender_id !== userId) onMessage(row);
+      }
     )
     .subscribe();
 

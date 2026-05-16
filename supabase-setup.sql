@@ -46,10 +46,37 @@ create table if not exists public.friends (
   check (user_id <> friend_id)
 );
 
+create table if not exists public.friend_requests (
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  addressee_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  responded_at timestamptz,
+  primary key (requester_id, addressee_id),
+  check (requester_id <> addressee_id),
+  check (status in ('pending', 'accepted', 'declined'))
+);
+
 create index if not exists tasks_user_id_idx on public.tasks(user_id);
 create index if not exists subjects_user_id_idx on public.subjects(user_id);
 create index if not exists friends_user_id_idx on public.friends(user_id);
 create index if not exists friends_friend_id_idx on public.friends(friend_id);
+create index if not exists friend_requests_addressee_status_idx
+  on public.friend_requests(addressee_id, status, created_at desc);
+create index if not exists friend_requests_requester_status_idx
+  on public.friend_requests(requester_id, status, created_at desc);
+
+-- Existing one-way friends from earlier app versions become mutual accepted
+-- friendships so confirmed chat membership works consistently.
+insert into public.friends (user_id, friend_id, created_at)
+select f.friend_id, f.user_id, f.created_at
+from public.friends f
+where not exists (
+  select 1
+  from public.friends reverse_f
+  where reverse_f.user_id = f.friend_id
+    and reverse_f.friend_id = f.user_id
+);
 
 -- The application treats subject names as case-insensitive when checking
 -- for duplicates ("Math" vs "math" should not both exist for the same
@@ -66,6 +93,7 @@ alter table public.profiles enable row level security;
 alter table public.subjects enable row level security;
 alter table public.tasks    enable row level security;
 alter table public.friends  enable row level security;
+alter table public.friend_requests enable row level security;
 
 -- Drop existing policies (so this file is idempotent).
 drop policy if exists "profiles_select_own"   on public.profiles;
@@ -85,6 +113,11 @@ drop policy if exists "tasks_delete_own"      on public.tasks;
 drop policy if exists "friends_select_own"    on public.friends;
 drop policy if exists "friends_insert_own"    on public.friends;
 drop policy if exists "friends_delete_own"    on public.friends;
+
+drop policy if exists "friend_requests_select_participant" on public.friend_requests;
+drop policy if exists "friend_requests_insert_requester"   on public.friend_requests;
+drop policy if exists "friend_requests_update_addressee"   on public.friend_requests;
+drop policy if exists "friend_requests_delete_participant" on public.friend_requests;
 
 -- Profiles: each user can read/write only their own profile row.
 create policy "profiles_select_own"
@@ -114,13 +147,32 @@ create policy "tasks_update_own"
 create policy "tasks_delete_own"
   on public.tasks for delete using (auth.uid() = user_id);
 
--- Friends are stored as the signed-in user's personal friend list.
+-- Friends can be read directly, but mutations go through the RPC helpers
+-- below so requests cannot bypass confirmation or create one-sided rows.
 create policy "friends_select_own"
   on public.friends for select using (auth.uid() = user_id);
-create policy "friends_insert_own"
-  on public.friends for insert with check (auth.uid() = user_id);
-create policy "friends_delete_own"
-  on public.friends for delete using (auth.uid() = user_id);
+
+-- Friend requests are visible only to the requester and recipient. Mutations
+-- go through RPC helpers so recipients cannot tamper with request ownership.
+create policy "friend_requests_select_participant"
+  on public.friend_requests for select using (
+    auth.uid() = requester_id or auth.uid() = addressee_id
+  );
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'friend_requests'
+    ) then
+    alter publication supabase_realtime add table public.friend_requests;
+  end if;
+end;
+$$;
 
 -- ------------------------------------------------------------------
 -- Auto-create a profile row whenever a new auth user signs up.
@@ -171,14 +223,18 @@ create trigger on_auth_user_created
 -- or username without opening the whole profiles table through RLS.
 -- ------------------------------------------------------------------
 
-create or replace function public.search_profiles(search_term text)
+drop function if exists public.search_profiles(text);
+
+create function public.search_profiles(search_term text)
 returns table (
   id uuid,
   name text,
   username text,
   avatar_type text,
   avatar_value text,
-  is_friend boolean
+  is_friend boolean,
+  incoming_request boolean,
+  outgoing_request boolean
 )
 language sql
 security definer
@@ -195,7 +251,21 @@ as $$
       from public.friends f
       where f.user_id = auth.uid()
         and f.friend_id = p.id
-    ) as is_friend
+    ) as is_friend,
+    exists (
+      select 1
+      from public.friend_requests fr
+      where fr.requester_id = p.id
+        and fr.addressee_id = auth.uid()
+        and fr.status = 'pending'
+    ) as incoming_request,
+    exists (
+      select 1
+      from public.friend_requests fr
+      where fr.requester_id = auth.uid()
+        and fr.addressee_id = p.id
+        and fr.status = 'pending'
+    ) as outgoing_request
   from public.profiles p
   where auth.uid() is not null
     and p.id <> auth.uid()
@@ -242,7 +312,137 @@ as $$
   order by f.created_at desc;
 $$;
 
+create or replace function public.list_friend_requests()
+returns table (
+  id uuid,
+  name text,
+  username text,
+  avatar_type text,
+  avatar_value text,
+  requester_id uuid,
+  addressee_id uuid,
+  direction text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    p.id,
+    p.name,
+    p.username,
+    p.avatar_type,
+    p.avatar_value,
+    fr.requester_id,
+    fr.addressee_id,
+    case
+      when fr.addressee_id = auth.uid() then 'incoming'
+      else 'outgoing'
+    end as direction,
+    fr.created_at
+  from public.friend_requests fr
+  join public.profiles p
+    on p.id = case
+      when fr.addressee_id = auth.uid() then fr.requester_id
+      else fr.addressee_id
+    end
+  where auth.uid() is not null
+    and fr.status = 'pending'
+    and (fr.requester_id = auth.uid() or fr.addressee_id = auth.uid())
+  order by fr.created_at desc;
+$$;
+
 create or replace function public.add_friend(friend_profile_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  accepted_existing boolean := false;
+begin
+  if auth.uid() is null then
+    raise exception 'You must be signed in to send friend requests.';
+  end if;
+
+  if friend_profile_id = auth.uid() then
+    raise exception 'You cannot request yourself as a friend.';
+  end if;
+
+  if not exists (select 1 from public.profiles p where p.id = friend_profile_id) then
+    raise exception 'That profile does not exist.';
+  end if;
+
+  if exists (
+    select 1
+    from public.friends f
+    where f.user_id = auth.uid()
+      and f.friend_id = friend_profile_id
+  ) then
+    return;
+  end if;
+
+  update public.friend_requests
+  set status = 'accepted', responded_at = now()
+  where requester_id = friend_profile_id
+    and addressee_id = auth.uid()
+    and status = 'pending'
+  returning true into accepted_existing;
+
+  if accepted_existing then
+    insert into public.friends (user_id, friend_id)
+    values
+      (auth.uid(), friend_profile_id),
+      (friend_profile_id, auth.uid())
+    on conflict (user_id, friend_id) do nothing;
+    return;
+  end if;
+
+  insert into public.friend_requests (requester_id, addressee_id, status, created_at, responded_at)
+  values (auth.uid(), friend_profile_id, 'pending', now(), null)
+  on conflict (requester_id, addressee_id)
+  do update set
+    status = 'pending',
+    created_at = now(),
+    responded_at = null
+  where public.friend_requests.status <> 'pending';
+end;
+$$;
+
+create or replace function public.accept_friend_request(requester_profile_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  found_request boolean := false;
+begin
+  if auth.uid() is null then
+    raise exception 'You must be signed in to accept friend requests.';
+  end if;
+
+  update public.friend_requests
+  set status = 'accepted', responded_at = now()
+  where requester_id = requester_profile_id
+    and addressee_id = auth.uid()
+    and status = 'pending'
+  returning true into found_request;
+
+  if not found_request then
+    raise exception 'Friend request is no longer available.';
+  end if;
+
+  insert into public.friends (user_id, friend_id)
+  values
+    (auth.uid(), requester_profile_id),
+    (requester_profile_id, auth.uid())
+  on conflict (user_id, friend_id) do nothing;
+end;
+$$;
+
+create or replace function public.decline_friend_request(requester_profile_id uuid)
 returns void
 language plpgsql
 security definer
@@ -250,29 +450,39 @@ set search_path = public
 as $$
 begin
   if auth.uid() is null then
-    raise exception 'You must be signed in to add friends.';
+    raise exception 'You must be signed in to decline friend requests.';
   end if;
 
-  if friend_profile_id = auth.uid() then
-    raise exception 'You cannot add yourself as a friend.';
-  end if;
-
-  insert into public.friends (user_id, friend_id)
-  values (auth.uid(), friend_profile_id)
-  on conflict (user_id, friend_id) do nothing;
+  update public.friend_requests
+  set status = 'declined', responded_at = now()
+  where requester_id = requester_profile_id
+    and addressee_id = auth.uid()
+    and status = 'pending';
 end;
 $$;
 
 create or replace function public.remove_friend(friend_profile_id uuid)
 returns void
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+
   delete from public.friends
-  where auth.uid() is not null
-    and user_id = auth.uid()
-    and friend_id = friend_profile_id;
+  where (user_id = auth.uid() and friend_id = friend_profile_id)
+     or (user_id = friend_profile_id and friend_id = auth.uid());
+
+  delete from public.friend_requests
+  where status = 'pending'
+    and (
+      (requester_id = auth.uid() and addressee_id = friend_profile_id)
+      or (requester_id = friend_profile_id and addressee_id = auth.uid())
+    );
+end;
 $$;
 
 -- ------------------------------------------------------------------

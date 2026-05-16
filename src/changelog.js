@@ -17,6 +17,16 @@
 
 export const CHANGELOG = [
   {
+    version: '1.2.2',
+    date: '2026-05-16',
+    title: 'CHATROOMS!!!!',
+    notes: [
+      'New: Notifications: Get notified when friends come online or join chatrooms',
+      'Improvement: Accept or deny friend requests',
+      'Improvement: Notification banner',
+    ],
+  },
+  {
     version: '1.2.1',
     date: '2026-05-15',
     title: 'CHATROOMS!!!!',
@@ -39,7 +49,7 @@ export const CHANGELOG = [
   },
   {
     version: '1.1.0 (PATCH)',
-    date: '25/4/2026',
+    date: '25-4-2026',
     title: 'Hotfix: deployment rejection fixed',
     notes: [
       'Fixed an issue where Vercel would reject the latest deployment due to no SSH key for the repo (my bad).',
@@ -48,7 +58,7 @@ export const CHANGELOG = [
   },
   {
     version: '1.1.0',
-    date: '25/4/2026',
+    date: '25-4-2026',
     title: 'Reliability pass and What\'s new',
     notes: [
       'New: "What\'s new" panel — see recent improvements from the Settings sheet.',
@@ -62,7 +72,7 @@ export const CHANGELOG = [
   },
   {
     version: '1.0.0',
-    date: '30/3/2026',
+    date: '30-3-2026',
     title: 'Initial public release',
     notes: [
       'New: tasks with due dates, subjects, and progress tracking.',

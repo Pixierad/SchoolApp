@@ -13,7 +13,15 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../theme';
-import { addFriend, loadFriends, removeFriend, searchProfiles } from '../storage';
+import {
+  acceptFriendRequest,
+  addFriend,
+  declineFriendRequest,
+  loadFriendRequests,
+  loadFriends,
+  removeFriend,
+  searchProfiles,
+} from '../storage';
 import { publicName } from '../profile';
 import ProfileAvatar from './ProfileAvatar';
 
@@ -26,6 +34,7 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
 
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState([]);
+  const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
   const [results, setResults] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -57,13 +66,16 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
     setMessage(null);
     if (!canUseFriends) {
       setFriends([]);
+      setRequests({ incoming: [], outgoing: [] });
       return;
     }
     let cancelled = false;
     setLoadingFriends(true);
-    loadFriends()
-      .then((items) => {
-        if (!cancelled) setFriends(items);
+    Promise.all([loadFriends(), loadFriendRequests()])
+      .then(([friendItems, requestItems]) => {
+        if (cancelled) return;
+        setFriends(friendItems);
+        setRequests(requestItems);
       })
       .catch((e) => {
         if (!cancelled) setMessage(e?.message || 'Could not load friends.');
@@ -115,13 +127,70 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
     setMessage(null);
     try {
       await addFriend(person.id);
+      const [nextFriends, nextRequests] = await Promise.all([loadFriends(), loadFriendRequests()]);
+      const becameFriend = nextFriends.some((item) => item.id === person.id);
       setResults((prev) =>
-        prev.map((item) => (item.id === person.id ? { ...item, isFriend: true } : item))
+        prev.map((item) =>
+          item.id === person.id
+            ? {
+                ...item,
+                isFriend: becameFriend,
+                incomingRequest: false,
+                outgoingRequest: !becameFriend,
+              }
+            : item
+        )
       );
-      const nextFriends = await loadFriends();
       setFriends(nextFriends);
+      setRequests(nextRequests);
+      setMessage(becameFriend ? 'Friend request accepted.' : 'Friend request sent.');
     } catch (e) {
-      setMessage(e?.message || 'Could not add friend.');
+      setMessage(e?.message || 'Could not send friend request.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleAccept = async (person) => {
+    if (!person?.id || busyId) return;
+    setBusyId(person.id);
+    setMessage(null);
+    try {
+      await acceptFriendRequest(person.id);
+      const [nextFriends, nextRequests] = await Promise.all([loadFriends(), loadFriendRequests()]);
+      setFriends(nextFriends);
+      setRequests(nextRequests);
+      setResults((prev) =>
+        prev.map((item) =>
+          item.id === person.id
+            ? { ...item, isFriend: true, incomingRequest: false, outgoingRequest: false }
+            : item
+        )
+      );
+      setMessage('Friend request accepted.');
+    } catch (e) {
+      setMessage(e?.message || 'Could not accept friend request.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDecline = async (person) => {
+    if (!person?.id || busyId) return;
+    setBusyId(person.id);
+    setMessage(null);
+    try {
+      await declineFriendRequest(person.id);
+      const nextRequests = await loadFriendRequests();
+      setRequests(nextRequests);
+      setResults((prev) =>
+        prev.map((item) =>
+          item.id === person.id ? { ...item, incomingRequest: false } : item
+        )
+      );
+      setMessage('Friend request declined.');
+    } catch (e) {
+      setMessage(e?.message || 'Could not decline friend request.');
     } finally {
       setBusyId(null);
     }
@@ -133,10 +202,16 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
     setMessage(null);
     try {
       await removeFriend(person.id);
+      const nextRequests = await loadFriendRequests();
       setFriends((prev) => prev.filter((item) => item.id !== person.id));
       setResults((prev) =>
-        prev.map((item) => (item.id === person.id ? { ...item, isFriend: false } : item))
+        prev.map((item) =>
+          item.id === person.id
+            ? { ...item, isFriend: false, incomingRequest: false, outgoingRequest: false }
+            : item
+        )
       );
+      setRequests(nextRequests);
     } catch (e) {
       setMessage(e?.message || 'Could not remove friend.');
     } finally {
@@ -185,13 +260,12 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
                     </View>
                   ) : null}
                   {results.map((person) => (
-                    <FriendRow
+                    <SearchResultRow
                       key={person.id}
                       person={person}
                       busy={busyId === person.id}
-                      actionLabel={person.isFriend ? 'Added' : 'Add'}
-                      disabled={person.isFriend}
-                      onPress={() => handleAdd(person)}
+                      onAdd={() => handleAdd(person)}
+                      onAccept={() => handleAccept(person)}
                       styles={styles}
                     />
                   ))}
@@ -199,6 +273,38 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
                     <Text style={styles.emptyText}>No matching profiles yet.</Text>
                   ) : null}
                 </View>
+
+                {requests.incoming.length > 0 ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Friend requests</Text>
+                    {requests.incoming.map((person) => (
+                      <FriendRequestRow
+                        key={person.id}
+                        person={person}
+                        busy={busyId === person.id}
+                        onAccept={() => handleAccept(person)}
+                        onDecline={() => handleDecline(person)}
+                        styles={styles}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+
+                {requests.outgoing.length > 0 ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Sent requests</Text>
+                    {requests.outgoing.map((person) => (
+                      <FriendRow
+                        key={person.id}
+                        person={person}
+                        busy={busyId === person.id}
+                        actionLabel="Requested"
+                        disabled
+                        styles={styles}
+                      />
+                    ))}
+                  </View>
+                ) : null}
 
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>Your friends</Text>
@@ -224,6 +330,77 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+function SearchResultRow({ person, busy, onAdd, onAccept, styles }) {
+  if (person.isFriend) {
+    return (
+      <FriendRow
+        person={person}
+        busy={busy}
+        actionLabel="Friends"
+        disabled
+        styles={styles}
+      />
+    );
+  }
+
+  if (person.outgoingRequest) {
+    return (
+      <FriendRow
+        person={person}
+        busy={busy}
+        actionLabel="Requested"
+        disabled
+        styles={styles}
+      />
+    );
+  }
+
+  return (
+    <FriendRow
+      person={person}
+      busy={busy}
+      actionLabel={person.incomingRequest ? 'Confirm' : 'Request'}
+      onPress={person.incomingRequest ? onAccept : onAdd}
+      styles={styles}
+    />
+  );
+}
+
+function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
+  const name = publicName(person);
+  const username = person.username ? `@${person.username}` : 'No username';
+
+  return (
+    <View style={styles.friendRow}>
+      <ProfileAvatar profile={person} size={42} />
+      <View style={styles.friendText}>
+        <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.friendUsername} numberOfLines={1}>{username}</Text>
+      </View>
+      <View style={styles.requestActions}>
+        <Pressable
+          onPress={onDecline}
+          disabled={busy}
+          style={[styles.friendAction, styles.friendActionSubtle, busy && styles.friendActionDisabled]}
+        >
+          <Text style={styles.friendActionSubtleText}>Decline</Text>
+        </Pressable>
+        <Pressable
+          onPress={onAccept}
+          disabled={busy}
+          style={[styles.friendAction, busy && styles.friendActionDisabled]}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" />
+          ) : (
+            <Text style={styles.friendActionText}>Confirm</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -386,6 +563,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     friendActionDanger: {
       backgroundColor: colors.dangerSoft,
     },
+    friendActionSubtle: {
+      minWidth: 70,
+      backgroundColor: colors.cardMuted,
+    },
     friendActionDisabled: {
       opacity: 0.55,
     },
@@ -396,5 +577,15 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     friendActionDangerText: {
       color: colors.danger,
+    },
+    friendActionSubtleText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    requestActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
     },
   });
