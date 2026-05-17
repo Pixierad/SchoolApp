@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow School App to choose a profile picture from your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,13 +29,7 @@
     },
     "plugins": [
       "expo-asset",
-      "@react-native-community/datetimepicker",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow School App to choose a profile picture from your photo library."
-        }
-      ]
+      "@react-native-community/datetimepicker"
     ]
   }
 }

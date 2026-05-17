@@ -13,13 +13,11 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../theme';
 import { AVATAR_EMOJIS, isValidUsername, normalizeProfile, normalizeUsername } from '../profile';
+import { MAX_PROFILE_IMAGE_BYTES, pickProfileImage } from '../utils/pickProfileImage';
 import ProfileAvatar from './ProfileAvatar';
-
-const MAX_PROFILE_IMAGE_BYTES = 1500 * 1024;
 
 export default function ProfileSheet({
   visible,
@@ -194,37 +192,14 @@ export default function ProfileSheet({
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Photos permission needed',
-        'Allow photo access to choose a profile picture.'
-      );
+    const result = await pickProfileImage();
+    if (!result) return;
+    if (result.errorMessage) {
+      if (result.errorTitle) Alert.alert(result.errorTitle, result.errorMessage);
+      else setProfileError(result.errorMessage);
       return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.75,
-      base64: true,
-    });
-    if (result.canceled) return;
-
-    const asset = result.assets?.[0];
-    if (!asset?.base64) {
-      setProfileError('Could not read that image.');
-      return;
-    }
-
-    const mimeType = asset.mimeType || 'image/jpeg';
-    const imageBytes = Math.ceil((asset.base64.length * 3) / 4);
-    if (imageBytes > MAX_PROFILE_IMAGE_BYTES) {
-      setProfileError('Choose an image under 1.5 MB.');
-      return;
-    }
-    setAvatar('image', `data:${mimeType};base64,${asset.base64}`);
+    setAvatar('image', result.uri);
   };
 
   const handleWebImageUpload = (event) => {
