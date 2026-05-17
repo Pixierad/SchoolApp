@@ -523,19 +523,24 @@ function RoomView({
 }) {
   const [selection, setSelection] = useState({ start: draft.length, end: draft.length });
   const currentUsername = normalizeUsername(profile?.username);
-  const activeMention = getActiveMention(draft, selection.start);
+  const activeMention =
+    getActiveMention(draft, selection.start) || getActiveMention(draft, draft.length);
   const mentionOptions = useMemo(
     () => getMentionOptions(room, userId, activeMention?.query),
     [room, userId, activeMention?.query]
   );
   const showMentions = !!activeMention && mentionOptions.length > 0;
   const insertMention = (person) => {
-    const username = normalizeUsername(person?.username);
-    if (!username || !activeMention) return;
-    const next = replaceActiveMention(draft, activeMention, username);
-    const nextCursor = activeMention.start + username.length + 2;
+    const handle = mentionHandle(person);
+    if (!handle || !activeMention) return;
+    const next = replaceActiveMention(draft, activeMention, handle);
+    const nextCursor = activeMention.start + handle.length + 2;
     setDraft(next);
     setSelection({ start: nextCursor, end: nextCursor });
+  };
+  const updateDraft = (value) => {
+    setDraft(value);
+    setSelection({ start: value.length, end: value.length });
   };
 
   return (
@@ -582,7 +587,7 @@ function RoomView({
                 <ProfileAvatar profile={person} size={28} />
                 <View style={styles.mentionText}>
                   <Text style={styles.mentionName} numberOfLines={1}>{publicName(person)}</Text>
-                  <Text style={styles.mentionUsername} numberOfLines={1}>@{person.username}</Text>
+                  <Text style={styles.mentionUsername} numberOfLines={1}>@{mentionHandle(person)}</Text>
                 </View>
               </Pressable>
             ))}
@@ -590,7 +595,7 @@ function RoomView({
         ) : null}
         <TextInput
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={updateDraft}
           onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
           placeholder="Message"
           placeholderTextColor={colors.textFaint}
@@ -742,13 +747,19 @@ function getActiveMention(value, cursorPosition) {
 function getMentionOptions(room, userId, query) {
   if (query == null) return [];
   return (room?.members || [])
-    .filter((person) => person.id !== userId && normalizeUsername(person.username))
+    .filter((person) => person.id !== userId && mentionHandle(person))
     .filter((person) => {
-      const username = normalizeUsername(person.username);
+      const handle = mentionHandle(person);
       const name = publicName(person).toLowerCase();
-      return username.includes(query) || name.includes(query);
+      return handle.includes(query) || name.includes(query);
     })
     .slice(0, 5);
+}
+
+function mentionHandle(person) {
+  const username = normalizeUsername(person?.username);
+  if (username) return username;
+  return normalizeUsername(publicName(person));
 }
 
 function replaceActiveMention(value, activeMention, username) {
