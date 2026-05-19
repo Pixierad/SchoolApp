@@ -20,6 +20,7 @@ import { resolveSubjectStyle, SUBJECT_COLOR_PRESETS } from '../../shared/utils/s
 
 export default function SubjectManager({
   visible,
+  embedded = false,
   subjects,
   onChange,
   onClose,
@@ -169,6 +170,84 @@ export default function SubjectManager({
     ]);
   };
 
+  if (embedded) {
+    if (!visible) return null;
+    return (
+      <View style={[styles.sheet, styles.embeddedWindow, shadow.card]}>
+        <View style={styles.embeddedHeader}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Subjects</Text>
+          </View>
+        </View>
+
+        <View style={styles.addRow}>
+          <Pressable
+            onPress={() => setEditing({ index: null, draft: blankSubject() })}
+            style={styles.addBtn}
+          >
+            <Text style={styles.addBtnText}>+ Add subject</Text>
+          </Pressable>
+        </View>
+
+        {subjects.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>
+              No subjects yet. Add a few to organize your tasks by class.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={subjects}
+            keyExtractor={(item, i) => `${item.name}-${i}`}
+            style={styles.listOuter}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+            renderItem={({ item, index }) => {
+              const color = resolveSubjectStyle(item.name, subjects, { colorForSubject, isDark });
+              const count = taskCountsBySubject[item.name] ?? 0;
+              const meta = formatRowMeta(item, count);
+              return (
+                <Pressable
+                  onPress={() => setEditing({ index, draft: { ...item } })}
+                  style={({ pressed }) => [
+                    styles.row,
+                    { backgroundColor: color.bg },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <View style={[styles.dot, { backgroundColor: color.fg }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowTitle, { color: color.fg }]}>{item.name}</Text>
+                    <Text style={styles.rowMeta} numberOfLines={1}>{meta}</Text>
+                  </View>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      remove(index);
+                    }}
+                    hitSlop={8}
+                    style={styles.removeBtn}
+                  >
+                    <Text style={styles.removeText}>Ã—</Text>
+                  </Pressable>
+                </Pressable>
+              );
+            }}
+          />
+        )}
+
+        <SubjectEditor
+          visible={!!editing}
+          embedded
+          isNew={editing?.index == null}
+          initial={editing?.draft}
+          onCancel={() => setEditing(null)}
+          onSave={handleSaveSubject}
+        />
+      </View>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
       <KeyboardAvoidingView
@@ -270,7 +349,7 @@ function formatRowMeta(subject, count) {
   return parts.join(' · ');
 }
 
-function SubjectEditor({ visible, isNew, initial, onCancel, onSave }) {
+function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, onSave }) {
   const { colors, spacing, radius, typography, shadow } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),
@@ -356,8 +435,115 @@ function SubjectEditor({ visible, isNew, initial, onCancel, onSave }) {
   );
 
   const submit = () => {
-    if (onSave({ name, room, teacher, color }) !== false) closeWithAnimation();
+    if (onSave({ name, room, teacher, color }) !== false) {
+      if (embedded) onCancel?.();
+      else closeWithAnimation();
+    }
   };
+
+  if (embedded) {
+    if (!visible) return null;
+    return (
+      <View style={styles.editorInlineOverlay}>
+        <Pressable style={styles.backdropFill} onPress={onCancel} />
+        <View style={[styles.editorSheet, styles.editorInlinePanel, shadow.float]}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{isNew ? 'New subject' : 'Edit subject'}</Text>
+            <Pressable onPress={onCancel} hitSlop={8}>
+              <Text style={styles.doneText}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.editorContent}
+          >
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Name</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Math"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                autoFocus={isNew}
+                returnKeyType="next"
+                maxLength={40}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Room number</Text>
+              <TextInput
+                value={room}
+                onChangeText={setRoom}
+                placeholder="e.g. A-204"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                returnKeyType="next"
+                maxLength={20}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Teacher</Text>
+              <TextInput
+                value={teacher}
+                onChangeText={setTeacher}
+                placeholder="e.g. Ms. Patel"
+                placeholderTextColor={colors.textFaint}
+                style={styles.input}
+                returnKeyType="done"
+                maxLength={40}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Color</Text>
+              <View style={styles.colorRow}>
+                <Pressable
+                  onPress={() => setColor(null)}
+                  style={[
+                    styles.colorAuto,
+                    color == null && { borderColor: colors.text, borderWidth: 3 },
+                  ]}
+                >
+                  <Text style={styles.colorAutoText}>Auto</Text>
+                </Pressable>
+                {SUBJECT_COLOR_PRESETS.map((hex) => {
+                  const selected = color && color.toLowerCase() === hex.toLowerCase();
+                  return (
+                    <Pressable
+                      key={hex}
+                      onPress={() => setColor(hex)}
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: hex },
+                        selected && { borderColor: colors.text, borderWidth: 3 },
+                      ]}
+                      accessibilityLabel={hex}
+                    />
+                  );
+                })}
+              </View>
+              <Text style={styles.hint}>
+                "Auto" picks a color from the theme based on the subject name.
+              </Text>
+            </View>
+          </ScrollView>
+
+          <View style={styles.editorFooter}>
+            <Pressable onPress={onCancel} style={styles.cancelBtn}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={submit} style={styles.saveBtn}>
+              <Text style={styles.saveText}>{isNew ? 'Add subject' : 'Save'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
@@ -486,6 +672,20 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       height: '75%',
       paddingBottom: spacing.lg,
     },
+    embeddedWindow: {
+      flex: 1,
+      position: 'relative',
+      height: undefined,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    embeddedHeader: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: spacing.xs,
+    },
     dragZone: {
       paddingBottom: spacing.sm,
     },
@@ -588,12 +788,27 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.overlay,
       justifyContent: 'flex-end',
     },
+    editorInlineOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.overlay,
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
     editorSheet: {
       backgroundColor: colors.bg,
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
       maxHeight: '90%',
       paddingBottom: spacing.lg,
+    },
+    editorInlinePanel: {
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 560,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
     },
     editorContent: {
       padding: spacing.lg,

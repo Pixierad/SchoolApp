@@ -29,7 +29,7 @@ import {
 import { publicName } from '../../shared/profile';
 import ProfileAvatar from '../profile/ProfileAvatar';
 
-export default function FriendsSheet({ visible, onClose, session = null }) {
+export default function FriendsSheet({ visible, embedded = false, onClose, session = null }) {
   const { colors, spacing, radius, typography, shadow } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),
@@ -287,6 +287,144 @@ export default function FriendsSheet({ visible, onClose, session = null }) {
       setBusyId(null);
     }
   };
+
+  if (embedded) {
+    if (!visible) return null;
+    return (
+      <View style={[styles.sheet, styles.embeddedWindow, shadow.card]}>
+        <View style={styles.embeddedHeader}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Friends</Text>
+          </View>
+        </View>
+
+        <View style={styles.content}>
+          {!canUseFriends ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeTitle}>Friend search needs an account</Text>
+              <Text style={styles.noticeText}>
+                Sign in with cloud sync to find classmates by name or username.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Find people</Text>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search name or username"
+                  placeholderTextColor={colors.textFaint}
+                  style={styles.input}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searching ? <ActivityIndicator color={colors.primary} /> : null}
+                {message ? (
+                  <View style={styles.errorBox}>
+                    <Text style={styles.errorText}>{message}</Text>
+                  </View>
+                ) : null}
+                {results.length > 0 ? (
+                  <ScrollView
+                    style={styles.compactListFrame}
+                    contentContainerStyle={styles.listFrameContent}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {results.map((person) => (
+                      <SearchResultRow
+                        key={person.id}
+                        person={person}
+                        busy={busyId === person.id}
+                        onAdd={() => handleAdd(person)}
+                        onAccept={() => handleAccept(person)}
+                        styles={styles}
+                      />
+                    ))}
+                  </ScrollView>
+                ) : null}
+                {query.trim().length >= 2 && !searching && results.length === 0 ? (
+                  <Text style={styles.emptyText}>No matching profiles yet.</Text>
+                ) : null}
+              </View>
+
+              {requests.incoming.length > 0 ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Friend requests</Text>
+                  <ScrollView
+                    style={styles.compactListFrame}
+                    contentContainerStyle={styles.listFrameContent}
+                    nestedScrollEnabled
+                  >
+                    {requests.incoming.map((person) => (
+                      <FriendRequestRow
+                        key={person.id}
+                        person={person}
+                        busy={busyId === person.id}
+                        onAccept={() => handleAccept(person)}
+                        onDecline={() => handleDecline(person)}
+                        styles={styles}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Requests sent</Text>
+                <ScrollView
+                  style={styles.listFrame}
+                  contentContainerStyle={styles.listFrameContent}
+                  nestedScrollEnabled
+                >
+                  {requests.outgoing.length === 0 ? (
+                    <Text style={styles.emptyText}>Requests you send will show up here.</Text>
+                  ) : (
+                    requests.outgoing.map((person) => (
+                      <FriendRow
+                        key={person.id}
+                        person={person}
+                        busy={busyId === person.id}
+                        actionLabel="Requested"
+                        disabled
+                        styles={styles}
+                      />
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Friends</Text>
+                <ScrollView
+                  style={styles.listFrame}
+                  contentContainerStyle={styles.listFrameContent}
+                  nestedScrollEnabled
+                >
+                  {loadingFriends ? <ActivityIndicator color={colors.primary} /> : null}
+                  {!loadingFriends && friends.length === 0 ? (
+                    <Text style={styles.emptyText}>Friends you add will show up here.</Text>
+                  ) : null}
+                  {friends.map((person) => (
+                    <FriendRow
+                      key={person.id}
+                      person={person}
+                      busy={busyId === person.id}
+                      actionLabel="Remove"
+                      danger
+                      onPress={() => handleRemove(person)}
+                      styles={styles}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
@@ -559,6 +697,20 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       maxHeight: '88%',
       paddingBottom: spacing.lg,
       overflow: 'hidden',
+    },
+    embeddedWindow: {
+      flex: 1,
+      alignSelf: 'stretch',
+      maxWidth: undefined,
+      maxHeight: undefined,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    embeddedHeader: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: spacing.xs,
     },
     dragZone: {
       paddingBottom: spacing.sm,

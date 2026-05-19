@@ -50,7 +50,7 @@ const COMPOSER_INPUT_MAX_HEIGHT =
 const COMPOSER_INPUT_FONT_SIZE = 15;
 const COMPOSER_INPUT_AVERAGE_CHAR_WIDTH = 7.1;
 
-export default function ChatSheet({ visible, onClose, session = null, profile = null }) {
+export default function ChatSheet({ visible, embedded = false, onClose, session = null, profile = null }) {
   const { colors, spacing, radius, typography } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),
@@ -305,18 +305,18 @@ export default function ChatSheet({ visible, onClose, session = null, profile = 
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
-      <View style={styles.screen}>
-        <View style={styles.chatWindow}>
+  const content = (
+    <View style={[styles.screen, embedded && styles.embeddedScreen]}>
+        <View style={[styles.chatWindow, embedded && styles.embeddedChatWindow]}>
           <View style={[styles.windowHeader, mode === 'create' && styles.windowHeaderPlain]}>
             <View style={styles.header}>
               <Pressable
                 onPress={mode === 'list' ? onClose : () => setMode('list')}
+                disabled={embedded && mode === 'list'}
                 hitSlop={8}
                 style={styles.headerSide}
               >
-                <Text style={styles.backText}>Back</Text>
+                <Text style={styles.backText}>{embedded && mode === 'list' ? '' : 'Back'}</Text>
               </Pressable>
               {mode === 'room' ? (
                 <Pressable
@@ -416,6 +416,16 @@ export default function ChatSheet({ visible, onClose, session = null, profile = 
           />
         ) : null}
       </View>
+  );
+
+  if (embedded) {
+    if (!visible) return null;
+    return content;
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
+      {content}
     </Modal>
   );
 }
@@ -1212,6 +1222,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingTop: Platform.OS === 'ios' ? 44 : Platform.OS === 'web' ? 0 : spacing.lg,
       paddingBottom: 0,
     },
+    embeddedScreen: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
     backdropFill: { ...StyleSheet.absoluteFillObject },
     chatWindow: {
       flex: 1,
@@ -1219,6 +1235,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.bg,
       width: '100%',
       overflow: 'hidden',
+    },
+    embeddedChatWindow: {
+      alignSelf: 'stretch',
     },
     windowHeader: {
       borderBottomWidth: 1,

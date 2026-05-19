@@ -125,6 +125,7 @@ function AppContent() {
   const [notifications, setNotifications] = useState([]);
   const [activeBanner, setActiveBanner] = useState(null);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [desktopPage, setDesktopPage] = useState('tasks');
 
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
   const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
@@ -588,6 +589,7 @@ function AppContent() {
     setSettingsVisible(false);
     setFriendsVisible(false);
     setChatsVisible(false);
+    setDesktopPage('tasks');
     setNotificationsVisible(false);
     setNotifications([]);
     setActiveBanner(null);
@@ -609,6 +611,21 @@ function AppContent() {
     setHasUnreadChangelog(false);
     setChangelogVisible(true);
   }, []);
+
+  const openSubjects = useCallback(() => {
+    if (isDesktopWeb) setDesktopPage('subjects');
+    else setSubjectMgrVisible(true);
+  }, [isDesktopWeb]);
+
+  const openFriends = useCallback(() => {
+    if (isDesktopWeb) setDesktopPage('friends');
+    else setFriendsVisible(true);
+  }, [isDesktopWeb]);
+
+  const openChats = useCallback(() => {
+    if (isDesktopWeb) setDesktopPage('chats');
+    else setChatsVisible(true);
+  }, [isDesktopWeb]);
 
   // Still determining the initial Supabase session.
   if (session === undefined) {
@@ -647,10 +664,12 @@ function AppContent() {
           collapsed={desktopSidebarCollapsed}
           progress={desktopSidebarProgress}
           profile={profile}
+          activePage={desktopPage}
           onToggle={() => setDesktopSidebarCollapsed((value) => !value)}
-          onSubjects={() => setSubjectMgrVisible(true)}
-          onFriends={() => setFriendsVisible(true)}
-          onChats={() => setChatsVisible(true)}
+          onTasks={() => setDesktopPage('tasks')}
+          onSubjects={openSubjects}
+          onFriends={openFriends}
+          onChats={openChats}
           onProfile={() => setProfileVisible(true)}
           styles={styles}
           shadow={shadow}
@@ -663,6 +682,85 @@ function AppContent() {
           isDesktopWeb && { marginLeft: desktopMainMarginLeft },
         ]}
       >
+        {isDesktopWeb && desktopPage !== 'tasks' ? (
+          <View style={styles.desktopPage}>
+            <View style={styles.desktopPageHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.greeting}>{desktopPage}</Text>
+                <Text style={styles.headerTitle}>
+                  {desktopPage === 'subjects'
+                    ? 'Subjects'
+                    : desktopPage === 'friends'
+                      ? 'Friends'
+                      : 'Chats'}
+                </Text>
+              </View>
+              <View style={styles.headerActions}>
+                <DesktopVersionBadge styles={styles} />
+                <Pressable
+                  onPress={() => setNotificationsVisible(true)}
+                  style={styles.iconBtn}
+                  hitSlop={8}
+                  accessibilityLabel="Open notifications"
+                >
+                  <Text style={styles.iconBtnText}>{'\u{1F514}'}</Text>
+                  {notifications.length > 0 ? (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>
+                        {notifications.length > 9 ? '9+' : notifications.length}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => setSettingsVisible(true)}
+                  style={styles.iconBtn}
+                  hitSlop={8}
+                  accessibilityLabel="Open settings"
+                >
+                  <Text style={styles.iconBtnText}>âš™ï¸</Text>
+                </Pressable>
+                <Pressable
+                  onPress={openChangelog}
+                  style={styles.iconBtn}
+                  hitSlop={8}
+                  accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
+                >
+                  <Text style={styles.iconBtnText}>ðŸ“œ</Text>
+                  {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
+                </Pressable>
+              </View>
+            </View>
+            {desktopPage === 'subjects' ? (
+              <SubjectManager
+                visible
+                embedded
+                subjects={subjects}
+                onChange={updateSubjects}
+                onClose={() => setDesktopPage('tasks')}
+                taskCountsBySubject={taskCountsBySubject}
+              />
+            ) : null}
+            {desktopPage === 'friends' ? (
+              <FriendsSheet
+                visible
+                embedded
+                onClose={() => setDesktopPage('tasks')}
+                session={session}
+              />
+            ) : null}
+            {desktopPage === 'chats' ? (
+              <ChatSheet
+                visible
+                embedded
+                onClose={() => setDesktopPage('tasks')}
+                session={session}
+                profile={profile}
+              />
+            ) : null}
+          </View>
+        ) : (
+          <>
         <View style={[styles.header, isDesktopWeb && styles.desktopHeader]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting(publicName(profile))}</Text>
@@ -757,13 +855,15 @@ function AppContent() {
             profile={profile}
             onProfile={() => setProfileVisible(true)}
             onAddTask={openNewTask}
-            onSubjects={() => setSubjectMgrVisible(true)}
-            onFriends={() => setFriendsVisible(true)}
-            onChats={() => setChatsVisible(true)}
+            onSubjects={openSubjects}
+            onFriends={openFriends}
+            onChats={openChats}
             styles={styles}
             shadow={shadow}
           />
         ) : null}
+          </>
+        )}
 
       </Animated.View>
 
@@ -776,7 +876,9 @@ function AppContent() {
         onDelete={handleDeleteTask}
         onCancel={closeForm}
         onManageSubjects={() => {
-          if (Platform.OS === 'web') {
+          if (isDesktopWeb) {
+            setDesktopPage('subjects');
+          } else if (Platform.OS === 'web') {
             setSubjectMgrVisible(true);
           } else {
             setFormVisible(false);
@@ -843,8 +945,8 @@ function AppContent() {
         onClear={() => setNotifications([])}
         onPressNotification={(notification) => {
           setNotificationsVisible(false);
-          if (notification.type === 'friend') setFriendsVisible(true);
-          if (notification.type === 'message') setChatsVisible(true);
+          if (notification.type === 'friend') openFriends();
+          if (notification.type === 'message') openChats();
         }}
         styles={styles}
         shadow={shadow}
@@ -887,6 +989,17 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       flex: 1,
       minWidth: 0,
       paddingVertical: spacing.md,
+    },
+    desktopPage: {
+      flex: 1,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.sm,
+      gap: spacing.md,
+    },
+    desktopPageHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
     },
     desktopSidebar: {
       position: 'absolute',
@@ -952,6 +1065,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     desktopSidebarButtonPressed: {
       backgroundColor: colors.cardMuted,
+    },
+    desktopSidebarButtonActive: {
+      backgroundColor: colors.primarySoft,
     },
     desktopSidebarIcon: {
       width: 24,

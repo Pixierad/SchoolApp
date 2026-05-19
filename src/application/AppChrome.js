@@ -85,6 +85,7 @@ export function BottomActionBar({
 }
 
 const SIDEBAR_ITEMS = [
+  { key: 'tasks', label: 'Tasks', icon: '\u2713' },
   { key: 'chats', label: 'Chats', icon: '\u{1F4AC}' },
   { key: 'subjects', label: 'Subjects', icon: '\u{1F4DA}' },
   { key: 'friends', label: 'Friends', icon: '\u{1F465}' },
@@ -94,7 +95,9 @@ export function DesktopSidebar({
   collapsed,
   progress,
   profile,
+  activePage,
   onToggle,
+  onTasks,
   onSubjects,
   onFriends,
   onChats,
@@ -119,6 +122,7 @@ export function DesktopSidebar({
     outputRange: [-10, 0],
   });
   const actions = {
+    tasks: onTasks,
     chats: onChats,
     subjects: onSubjects,
     friends: onFriends,
@@ -159,6 +163,7 @@ export function DesktopSidebar({
             labelWidth={labelWidth}
             labelOpacity={progress}
             labelSlide={labelSlide}
+            active={activePage === item.key}
             onPress={actions[item.key]}
             styles={styles}
           />
@@ -195,14 +200,16 @@ export function DesktopSidebar({
   );
 }
 
-function SidebarButton({ label, icon, labelWidth, labelOpacity, labelSlide, onPress, styles }) {
+function SidebarButton({ label, icon, labelWidth, labelOpacity, labelSlide, active, onPress, styles }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.desktopSidebarButton,
+        active && styles.desktopSidebarButtonActive,
         pressed && styles.desktopSidebarButtonPressed,
       ]}
     >
