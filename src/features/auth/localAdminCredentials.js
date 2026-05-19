@@ -8,13 +8,17 @@ export const LOCAL_ADMIN_USERNAME = 'test';
 export const LOCAL_ADMIN_PASSWORD = 'admin123';
 
 export const LOCAL_ADMIN_SESSION_STORAGE_KEY = '@schoolapp:localAdminSession:v1';
-export const LOCAL_ADMIN_ALLOWED_HOSTS = ['v.dev'];
+export const LOCAL_ADMIN_ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'v.dev'];
+export const LOCAL_ADMIN_ALLOWED_SUFFIXES = ['.v.dev'];
 
 export function isLocalAdminAccessAllowed() {
   if (Platform.OS !== 'web') return __DEV__;
 
-  const hostname = globalThis?.location?.hostname;
-  return LOCAL_ADMIN_ALLOWED_HOSTS.includes(String(hostname || '').toLowerCase());
+  const hostname = String(globalThis?.location?.hostname || '').toLowerCase();
+  return (
+    LOCAL_ADMIN_ALLOWED_HOSTS.includes(hostname) ||
+    LOCAL_ADMIN_ALLOWED_SUFFIXES.some((suffix) => hostname.endsWith(suffix))
+  );
 }
 
 export function isLocalAdminCredentials(username, password) {

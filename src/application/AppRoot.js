@@ -59,6 +59,7 @@ import FriendsSheet from '../features/friends/FriendsSheet';
 import ChatSheet from '../features/chat/ChatSheet';
 import {
   BottomActionBar,
+  DESKTOP_SIDEBAR_ITEM_KEYS,
   DesktopSidebar,
   DesktopVersionBadge,
   NotificationBanner,
@@ -77,6 +78,8 @@ import {
   isLocalAdminSession,
   LOCAL_ADMIN_SESSION_STORAGE_KEY,
 } from '../features/auth/localAdminCredentials';
+
+const ENHANCE_MOTION_STORAGE_KEY = '@schoolapp:enhanceMotion:v1';
 
 export default function App() {
   return (
@@ -126,9 +129,17 @@ function AppContent() {
   const [activeBanner, setActiveBanner] = useState(null);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [desktopPage, setDesktopPage] = useState('tasks');
+  const [renderedDesktopPage, setRenderedDesktopPage] = useState('tasks');
+  const previousDesktopPageRef = useRef('tasks');
+  const pendingDesktopPageRef = useRef(null);
+  const [desktopTaskSubjectsVisible, setDesktopTaskSubjectsVisible] = useState(false);
+  const [enhanceMotion, setEnhanceMotion] = useState(false);
 
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
   const [resumeFormAfterSubjects, setResumeFormAfterSubjects] = useState(false);
+  const desktopPageMotionRef = useRef(null);
+  if (desktopPageMotionRef.current == null) desktopPageMotionRef.current = new Animated.Value(1);
+  const desktopPageMotion = desktopPageMotionRef.current;
   const desktopSidebarProgressRef = useRef(null);
   if (desktopSidebarProgressRef.current == null) {
     desktopSidebarProgressRef.current = new Animated.Value(desktopSidebarCollapsed ? 0 : 1);
@@ -138,6 +149,12 @@ function AppContent() {
     inputRange: [0, 1],
     outputRange: [96, 248],
   });
+  const desktopPageDirection = useMemo(() => {
+    const previousIndex = DESKTOP_SIDEBAR_ITEM_KEYS.indexOf(previousDesktopPageRef.current);
+    const nextIndex = DESKTOP_SIDEBAR_ITEM_KEYS.indexOf(pendingDesktopPageRef.current || renderedDesktopPage);
+    if (previousIndex < 0 || nextIndex < 0 || previousIndex === nextIndex) return 1;
+    return nextIndex > previousIndex ? 1 : -1;
+  }, [renderedDesktopPage]);
   const notifiedFriendRequestsRef = useRef(new Set());
   const notifiedMessagesRef = useRef(new Set());
 
@@ -148,6 +165,23 @@ function AppContent() {
       useNativeDriver: false,
     }).start();
   }, [desktopSidebarCollapsed, desktopSidebarProgress]);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(ENHANCE_MOTION_STORAGE_KEY)
+      .then((value) => {
+        if (mounted) setEnhanceMotion(value === 'true');
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleEnhanceMotionChange = useCallback((value) => {
+    setEnhanceMotion(value);
+    AsyncStorage.setItem(ENHANCE_MOTION_STORAGE_KEY, value ? 'true' : 'false').catch(() => {});
+  }, []);
 
   // Wire up Supabase auth listener (no-op in local-only mode).
   useEffect(() => {
@@ -186,6 +220,35 @@ function AppContent() {
       setSortMode('due_date');
     }
   }, [filter, sortMode]);
+
+  useEffect(() => {
+    if (renderedDesktopPage === desktopPage) return;
+    if (!enhanceMotion || !isDesktopWeb) {
+      previousDesktopPageRef.current = desktopPage;
+      pendingDesktopPageRef.current = null;
+      setRenderedDesktopPage(desktopPage);
+      desktopPageMotion.setValue(1);
+      return;
+    }
+    pendingDesktopPageRef.current = desktopPage;
+    Animated.timing(desktopPageMotion, {
+      toValue: 0,
+      duration: 90,
+      useNativeDriver: true,
+    }).start(() => {
+      const nextPage = pendingDesktopPageRef.current || desktopPage;
+      setRenderedDesktopPage(nextPage);
+      desktopPageMotion.setValue(0);
+      Animated.timing(desktopPageMotion, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }).start(() => {
+        previousDesktopPageRef.current = nextPage;
+        pendingDesktopPageRef.current = null;
+      });
+    });
+  }, [desktopPage, desktopPageMotion, enhanceMotion, isDesktopWeb, renderedDesktopPage]);
 
   // Load user data whenever the active identity changes (sign in / sign out /
   // first boot in local mode). Re-keying on session.user?.id guarantees a
@@ -374,12 +437,14 @@ function AppContent() {
 
   const openNewTask = () => {
     setEditingTask(null);
+    setDesktopTaskSubjectsVisible(false);
     setTaskFormResetKey((k) => k + 1);
     setFormVisible(true);
   };
 
   const openEditTask = (task) => {
     setEditingTask(task);
+    setDesktopTaskSubjectsVisible(false);
     setTaskFormResetKey((k) => k + 1);
     setFormVisible(true);
   };
@@ -388,6 +453,7 @@ function AppContent() {
     setFormVisible(false);
     setEditingTask(null);
     setResumeFormAfterSubjects(false);
+    setDesktopTaskSubjectsVisible(false);
   };
 
   const reportSyncError = useCallback((action, error) => {
@@ -589,7 +655,10 @@ function AppContent() {
     setSettingsVisible(false);
     setFriendsVisible(false);
     setChatsVisible(false);
-    setDesktopPage('tasks');
+      setDesktopPage('tasks');
+      setRenderedDesktopPage('tasks');
+      previousDesktopPageRef.current = 'tasks';
+      pendingDesktopPageRef.current = null;
     setNotificationsVisible(false);
     setNotifications([]);
     setActiveBanner(null);
@@ -649,8 +718,9 @@ function AppContent() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <LoadingSkeleton styles={styles} isDesktopWeb={isDesktopWeb} />
       </SafeAreaView>
     );
   }
@@ -682,15 +752,30 @@ function AppContent() {
           isDesktopWeb && { marginLeft: desktopMainMarginLeft },
         ]}
       >
-        {isDesktopWeb && desktopPage !== 'tasks' ? (
-          <View style={styles.desktopPage}>
+        {isDesktopWeb && renderedDesktopPage !== 'tasks' ? (
+          <Animated.View
+            style={[
+              styles.desktopPage,
+              enhanceMotion && {
+                opacity: desktopPageMotion,
+                transform: [
+                  {
+                    translateY: desktopPageMotion.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [desktopPageDirection * 18, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <View style={styles.desktopPageHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.greeting}>{desktopPage}</Text>
+                <Text style={styles.greeting}>{renderedDesktopPage}</Text>
                 <Text style={styles.headerTitle}>
-                  {desktopPage === 'subjects'
+                  {renderedDesktopPage === 'subjects'
                     ? 'Subjects'
-                    : desktopPage === 'friends'
+                    : renderedDesktopPage === 'friends'
                       ? 'Friends'
                       : 'Chats'}
                 </Text>
@@ -731,7 +816,7 @@ function AppContent() {
                 </Pressable>
               </View>
             </View>
-            {desktopPage === 'subjects' ? (
+            {renderedDesktopPage === 'subjects' ? (
               <SubjectManager
                 visible
                 embedded
@@ -741,7 +826,7 @@ function AppContent() {
                 taskCountsBySubject={taskCountsBySubject}
               />
             ) : null}
-            {desktopPage === 'friends' ? (
+            {renderedDesktopPage === 'friends' ? (
               <FriendsSheet
                 visible
                 embedded
@@ -749,7 +834,7 @@ function AppContent() {
                 session={session}
               />
             ) : null}
-            {desktopPage === 'chats' ? (
+            {renderedDesktopPage === 'chats' ? (
               <ChatSheet
                 visible
                 embedded
@@ -758,9 +843,24 @@ function AppContent() {
                 profile={profile}
               />
             ) : null}
-          </View>
+          </Animated.View>
         ) : (
-          <>
+          <Animated.View
+            style={[
+              styles.tasksPage,
+              isDesktopWeb && enhanceMotion && {
+                opacity: desktopPageMotion,
+                transform: [
+                  {
+                    translateY: desktopPageMotion.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [desktopPageDirection * 18, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
         <View style={[styles.header, isDesktopWeb && styles.desktopHeader]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting(publicName(profile))}</Text>
@@ -819,7 +919,11 @@ function AppContent() {
           <SyncErrorBanner message={syncError} onDismiss={() => setSyncError(null)} styles={styles} />
         ) : null}
 
-        <FilterTabs value={filter} onChange={setFilter} counts={counts} />
+        <FilterTabs
+          value={filter}
+          onChange={setFilter}
+          counts={counts}
+        />
 
         <SortControls value={sortMode} onChange={setSortMode} filter={filter} styles={styles} />
 
@@ -862,7 +966,7 @@ function AppContent() {
             shadow={shadow}
           />
         ) : null}
-          </>
+          </Animated.View>
         )}
 
       </Animated.View>
@@ -871,13 +975,27 @@ function AppContent() {
         visible={formVisible}
         task={editingTask}
         subjects={subjects}
+        desktopWeb={isDesktopWeb}
+        subjectPanelVisible={desktopTaskSubjectsVisible}
+        subjectPanel={
+          isDesktopWeb ? (
+            <SubjectManager
+              visible={desktopTaskSubjectsVisible}
+              embedded
+              subjects={subjects}
+              onChange={updateSubjects}
+              onClose={() => setDesktopTaskSubjectsVisible(false)}
+              taskCountsBySubject={taskCountsBySubject}
+            />
+          ) : null
+        }
         resetKey={taskFormResetKey}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
         onCancel={closeForm}
         onManageSubjects={() => {
           if (isDesktopWeb) {
-            setDesktopPage('subjects');
+            setDesktopTaskSubjectsVisible(true);
           } else if (Platform.OS === 'web') {
             setSubjectMgrVisible(true);
           } else {
@@ -912,6 +1030,8 @@ function AppContent() {
         onClose={() => setSettingsVisible(false)}
         session={session}
         onSignOut={handleSignOut}
+        enhanceMotion={enhanceMotion}
+        onEnhanceMotionChange={handleEnhanceMotionChange}
         onShowChangelog={() => {
           setSettingsVisible(false);
           // Defer so the settings sheet can finish dismissing first.
@@ -974,6 +1094,54 @@ function subjectShallowEqual(a, b) {
   );
 }
 
+function LoadingSkeleton({ styles, isDesktopWeb }) {
+  const rows = isDesktopWeb ? [0, 1, 2, 3, 4] : [0, 1, 2];
+  return (
+    <View style={isDesktopWeb ? styles.skeletonShell : styles.skeletonMobile}>
+      {isDesktopWeb ? (
+        <View style={styles.skeletonSidebar}>
+          <View style={[styles.skeletonBlock, styles.skeletonToggle]} />
+          <View style={styles.skeletonNav}>
+            {[0, 1, 2, 3].map((item) => (
+              <View key={item} style={[styles.skeletonBlock, styles.skeletonNavItem]} />
+            ))}
+          </View>
+          <View style={[styles.skeletonBlock, styles.skeletonProfile]} />
+        </View>
+      ) : null}
+      <View style={styles.skeletonMain}>
+        <View style={styles.skeletonHeader}>
+          <View style={{ flex: 1, gap: 8 }}>
+            <View style={[styles.skeletonBlock, styles.skeletonKicker]} />
+            <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
+          </View>
+          <View style={styles.skeletonHeaderActions}>
+            <View style={[styles.skeletonBlock, styles.skeletonCircle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonCircle]} />
+          </View>
+        </View>
+        <View style={[styles.skeletonBlock, styles.skeletonProgress]} />
+        <View style={styles.skeletonTabs}>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={[styles.skeletonBlock, styles.skeletonTab]} />
+          ))}
+        </View>
+        <View style={styles.skeletonList}>
+          {rows.map((item) => (
+            <View key={item} style={[styles.skeletonBlock, styles.skeletonCard]}>
+              <View style={[styles.skeletonBlock, styles.skeletonCardCheck]} />
+              <View style={{ flex: 1, gap: 8 }}>
+                <View style={[styles.skeletonBlock, styles.skeletonCardLine]} />
+                <View style={[styles.skeletonBlock, styles.skeletonCardLineShort]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const makeStyles = ({ colors, spacing, radius, typography }) =>
   StyleSheet.create({
     root: {
@@ -983,6 +1151,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       flexDirection: 'column',
     },
     mobileMain: {
+      flex: 1,
+    },
+    tasksPage: {
       flex: 1,
     },
     desktopMain: {
@@ -1053,6 +1224,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       gap: spacing.sm,
       paddingHorizontal: spacing.sm,
       paddingTop: spacing.lg,
+      position: 'relative',
+    },
+    desktopSidebarActiveIndicator: {
+      position: 'absolute',
+      left: spacing.sm,
+      right: spacing.sm,
+      top: spacing.lg,
+      height: 48,
+      borderRadius: radius.md,
+      backgroundColor: colors.primarySoft,
     },
     desktopSidebarButton: {
       minHeight: 48,
@@ -1062,12 +1243,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       gap: spacing.md,
       paddingHorizontal: spacing.md,
       backgroundColor: 'transparent',
+      zIndex: 1,
     },
     desktopSidebarButtonPressed: {
       backgroundColor: colors.cardMuted,
     },
-    desktopSidebarButtonActive: {
-      backgroundColor: colors.primarySoft,
+    desktopSidebarButtonHovered: {
+      backgroundColor: colors.cardMuted,
     },
     desktopSidebarIcon: {
       width: 24,
@@ -1112,6 +1294,113 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.bg,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    skeletonShell: {
+      flex: 1,
+      flexDirection: 'row',
+      gap: spacing.xl,
+      padding: spacing.lg,
+      backgroundColor: colors.bg,
+    },
+    skeletonMobile: {
+      flex: 1,
+      padding: spacing.lg,
+      backgroundColor: colors.bg,
+    },
+    skeletonSidebar: {
+      width: 216,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: spacing.md,
+    },
+    skeletonNav: {
+      flex: 1,
+      gap: spacing.sm,
+      paddingTop: spacing.lg,
+    },
+    skeletonMain: {
+      flex: 1,
+      gap: spacing.md,
+      minWidth: 0,
+    },
+    skeletonHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingTop: spacing.sm,
+    },
+    skeletonHeaderActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    skeletonBlock: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: radius.md,
+      overflow: 'hidden',
+    },
+    skeletonToggle: {
+      width: 84,
+      height: 40,
+    },
+    skeletonNavItem: {
+      height: 48,
+    },
+    skeletonProfile: {
+      height: 54,
+    },
+    skeletonKicker: {
+      width: 120,
+      height: 12,
+    },
+    skeletonTitle: {
+      width: 220,
+      height: 28,
+    },
+    skeletonCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: radius.pill,
+    },
+    skeletonProgress: {
+      height: 92,
+    },
+    skeletonTabs: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    skeletonTab: {
+      width: 88,
+      height: 36,
+      borderRadius: radius.pill,
+    },
+    skeletonList: {
+      gap: spacing.sm,
+    },
+    skeletonCard: {
+      minHeight: 92,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      padding: spacing.lg,
+      backgroundColor: colors.card,
+    },
+    skeletonCardCheck: {
+      width: 24,
+      height: 24,
+      borderRadius: radius.sm,
+      backgroundColor: colors.cardMuted,
+    },
+    skeletonCardLine: {
+      width: '72%',
+      height: 16,
+      backgroundColor: colors.cardMuted,
+    },
+    skeletonCardLineShort: {
+      width: '44%',
+      height: 12,
+      backgroundColor: colors.cardMuted,
     },
     header: {
       flexDirection: 'row',

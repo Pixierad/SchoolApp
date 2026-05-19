@@ -70,6 +70,8 @@ export default function SettingsSheet({
   onClose,
   session = null,
   onSignOut,
+  enhanceMotion = false,
+  onEnhanceMotionChange,
   onShowChangelog,
 }) {
   const {
@@ -180,6 +182,28 @@ export default function SettingsSheet({
                 Long-press a custom theme to delete it.
               </Text>
             </View>
+
+            {Platform.OS === 'web' ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Experience</Text>
+                <Pressable
+                  onPress={() => onEnhanceMotionChange?.(!enhanceMotion)}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: enhanceMotion }}
+                  style={styles.switchRow}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.switchTitle}>Enhance motion</Text>
+                    <Text style={styles.hint}>
+                      Tween desktop workspace changes between sidebar pages.
+                    </Text>
+                  </View>
+                  <View style={[styles.switchTrack, enhanceMotion && styles.switchTrackOn]}>
+                    <View style={[styles.switchThumb, enhanceMotion && styles.switchThumbOn]} />
+                  </View>
+                </Pressable>
+              </View>
+            ) : null}
 
             {/* What's new */}
             {onShowChangelog ? (
@@ -948,6 +972,40 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     signOutText: {
       color: colors.danger,
       fontWeight: '700',
+    },
+    switchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: colors.cardMuted,
+      borderRadius: radius.md,
+      padding: spacing.md,
+    },
+    switchTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    switchTrack: {
+      width: 48,
+      height: 28,
+      borderRadius: radius.pill,
+      backgroundColor: colors.borderStrong,
+      padding: 3,
+      justifyContent: 'center',
+    },
+    switchTrackOn: {
+      backgroundColor: colors.primary,
+    },
+    switchThumb: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.card,
+    },
+    switchThumbOn: {
+      alignSelf: 'flex-end',
     },
 
     // What's-new row

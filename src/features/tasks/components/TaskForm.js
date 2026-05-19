@@ -23,6 +23,9 @@ export default function TaskForm({
   visible,
   task,
   subjects,
+  desktopWeb = false,
+  subjectPanelVisible = false,
+  subjectPanel = null,
   onSave,
   onDelete,
   onCancel,
@@ -50,6 +53,11 @@ export default function TaskForm({
     translateYRef.current = new Animated.Value(screenHeight);
   }
   const translateY = translateYRef.current;
+  const subjectPanelProgressRef = useRef(null);
+  if (subjectPanelProgressRef.current == null) {
+    subjectPanelProgressRef.current = new Animated.Value(subjectPanelVisible ? 1 : 0);
+  }
+  const subjectPanelProgress = subjectPanelProgressRef.current;
 
   // Track mount status so deferred animation callbacks (200ms timing.start
   // continuations) don't fire onCancel against a parent that has already
@@ -73,6 +81,14 @@ export default function TaskForm({
       }).start();
     }
   }, [visible, translateY, screenHeight]);
+
+  useEffect(() => {
+    Animated.timing(subjectPanelProgress, {
+      toValue: subjectPanelVisible ? 1 : 0,
+      duration: 240,
+      useNativeDriver: false,
+    }).start();
+  }, [subjectPanelVisible, subjectPanelProgress]);
 
   const closeWithAnimation = () => {
     Animated.timing(translateY, {
@@ -166,18 +182,13 @@ export default function TaskForm({
     if (selectedDate) setDueDate(toISODate(selectedDate));
   };
 
-  return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
-      >
-        <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
-        <Animated.View
-          style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
-        >
-          <View style={styles.dragZone} {...panResponder.panHandlers}>
-            <View style={styles.handle} />
+  const formContent = (
+    <>
+          <View
+            style={desktopWeb ? styles.desktopFormHeaderWrap : styles.dragZone}
+            {...(!desktopWeb ? panResponder.panHandlers : {})}
+          >
+            {!desktopWeb ? <View style={styles.handle} /> : null}
             <View style={styles.header}>
               <Text style={styles.title}>
                 {isEditing ? 'Edit task' : 'New task'}
@@ -360,6 +371,61 @@ export default function TaskForm({
               </Pressable>
             </View>
           </View>
+    </>
+  );
+
+  if (desktopWeb) {
+    const subjectPanelWidth = subjectPanelProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 456],
+    });
+    const subjectPanelTranslateX = subjectPanelProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [32, 0],
+    });
+
+    return (
+      <Modal visible={visible} animationType="fade" transparent onRequestClose={closeWithAnimation}>
+        <View style={styles.desktopBackdrop}>
+          <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+          <View style={styles.desktopDialogRow}>
+            <View style={[styles.sheet, styles.desktopTaskDialog, shadow.float]}>
+              {formContent}
+            </View>
+            <Animated.View
+              pointerEvents={subjectPanelVisible ? 'auto' : 'none'}
+              style={[styles.desktopSubjectSlot, { width: subjectPanelWidth }]}
+            >
+              <Animated.View
+                style={[
+                  styles.desktopSubjectDialog,
+                  shadow.float,
+                  {
+                    opacity: subjectPanelProgress,
+                    transform: [{ translateX: subjectPanelTranslateX }],
+                  },
+                ]}
+              >
+                {subjectPanel}
+              </Animated.View>
+            </Animated.View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.backdrop}
+      >
+        <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+        <Animated.View
+          style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
+        >
+          {formContent}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -441,8 +507,24 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.overlay,
       justifyContent: 'flex-end',
     },
+    desktopBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.xl,
+    },
     backdropFill: {
       ...StyleSheet.absoluteFillObject,
+    },
+    desktopDialogRow: {
+      width: '100%',
+      maxWidth: 1024,
+      height: '88%',
+      maxHeight: '88%',
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      justifyContent: 'center',
     },
     sheet: {
       backgroundColor: colors.bg,
@@ -451,11 +533,32 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       maxHeight: '90%',
       paddingBottom: spacing.lg,
     },
+    desktopTaskDialog: {
+      width: 520,
+      maxHeight: undefined,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    desktopSubjectSlot: {
+      overflow: 'hidden',
+    },
+    desktopSubjectDialog: {
+      width: 440,
+      height: '100%',
+      marginLeft: spacing.lg,
+    },
     dragZone: {
       // Big hit area at the top of the sheet for swipe-down-to-dismiss.
       paddingBottom: spacing.sm,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    desktopFormHeaderWrap: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: spacing.xs,
     },
     handle: {
       width: 40,

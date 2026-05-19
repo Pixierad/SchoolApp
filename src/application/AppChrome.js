@@ -90,6 +90,7 @@ const SIDEBAR_ITEMS = [
   { key: 'subjects', label: 'Subjects', icon: '\u{1F4DA}' },
   { key: 'friends', label: 'Friends', icon: '\u{1F465}' },
 ];
+export const DESKTOP_SIDEBAR_ITEM_KEYS = SIDEBAR_ITEMS.map((item) => item.key);
 
 export function DesktopSidebar({
   collapsed,
@@ -105,6 +106,10 @@ export function DesktopSidebar({
   styles,
   shadow,
 }) {
+  const activeIndex = Math.max(0, SIDEBAR_ITEMS.findIndex((item) => item.key === activePage));
+  const activeYRef = useRef(null);
+  if (activeYRef.current == null) activeYRef.current = new Animated.Value(activeIndex * 56);
+  const activeY = activeYRef.current;
   const sidebarWidth = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [64, 216],
@@ -127,6 +132,14 @@ export function DesktopSidebar({
     subjects: onSubjects,
     friends: onFriends,
   };
+
+  useEffect(() => {
+    Animated.timing(activeY, {
+      toValue: activeIndex * 56,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [activeIndex, activeY]);
 
   return (
     <Animated.View style={[styles.desktopSidebar, { width: sidebarWidth }, shadow.float]}>
@@ -155,6 +168,13 @@ export function DesktopSidebar({
       </View>
 
       <View style={styles.desktopSidebarNav}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.desktopSidebarActiveIndicator,
+            { transform: [{ translateY: activeY }] },
+          ]}
+        />
         {SIDEBAR_ITEMS.map((item) => (
           <SidebarButton
             key={item.key}
@@ -163,7 +183,6 @@ export function DesktopSidebar({
             labelWidth={labelWidth}
             labelOpacity={progress}
             labelSlide={labelSlide}
-            active={activePage === item.key}
             onPress={actions[item.key]}
             styles={styles}
           />
@@ -200,16 +219,15 @@ export function DesktopSidebar({
   );
 }
 
-function SidebarButton({ label, icon, labelWidth, labelOpacity, labelSlide, active, onPress, styles }) {
+function SidebarButton({ label, icon, labelWidth, labelOpacity, labelSlide, onPress, styles }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityState={{ selected: active }}
       accessibilityLabel={label}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }) => [
         styles.desktopSidebarButton,
-        active && styles.desktopSidebarButtonActive,
+        hovered && styles.desktopSidebarButtonHovered,
         pressed && styles.desktopSidebarButtonPressed,
       ]}
     >

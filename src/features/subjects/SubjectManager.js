@@ -177,6 +177,11 @@ export default function SubjectManager({
         <View style={styles.embeddedHeader}>
           <View style={styles.header}>
             <Text style={styles.title}>Subjects</Text>
+            {onClose ? (
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Text style={styles.doneText}>Close</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
