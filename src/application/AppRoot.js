@@ -699,11 +699,11 @@ function AppContent() {
                 <DesktopVersionBadge styles={styles} />
                 <Pressable
                   onPress={() => setNotificationsVisible(true)}
-                  style={styles.iconBtn}
+                  style={styles.desktopHeaderBtn}
                   hitSlop={8}
                   accessibilityLabel="Open notifications"
                 >
-                  <Text style={styles.iconBtnText}>{'\u{1F514}'}</Text>
+                  <Text style={styles.desktopHeaderBtnText}>Alerts</Text>
                   {notifications.length > 0 ? (
                     <View style={styles.notificationBadge}>
                       <Text style={styles.notificationBadgeText}>
@@ -714,19 +714,19 @@ function AppContent() {
                 </Pressable>
                 <Pressable
                   onPress={() => setSettingsVisible(true)}
-                  style={styles.iconBtn}
+                  style={styles.desktopHeaderBtn}
                   hitSlop={8}
                   accessibilityLabel="Open settings"
                 >
-                  <Text style={styles.iconBtnText}>âš™ï¸</Text>
+                  <Text style={styles.desktopHeaderBtnText}>Settings</Text>
                 </Pressable>
                 <Pressable
                   onPress={openChangelog}
-                  style={styles.iconBtn}
+                  style={styles.desktopHeaderBtn}
                   hitSlop={8}
                   accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
                 >
-                  <Text style={styles.iconBtnText}>ðŸ“œ</Text>
+                  <Text style={styles.desktopHeaderBtnText}>Updates</Text>
                   {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
                 </Pressable>
               </View>
@@ -1157,6 +1157,22 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     desktopVersionText: {
       color: colors.primary,
+      fontSize: 12,
+      fontWeight: '900',
+    },
+    desktopHeaderBtn: {
+      minHeight: 36,
+      borderRadius: radius.pill,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    desktopHeaderBtnText: {
+      color: colors.textMuted,
       fontSize: 12,
       fontWeight: '900',
     },

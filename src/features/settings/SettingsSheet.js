@@ -22,6 +22,38 @@ import {
   softFromPrimary,
 } from '../../shared/theme';
 
+const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || '';
+
+const LEGAL_CONTENT = {
+  privacy: {
+    title: 'Privacy',
+    body: [
+      'School App is a schoolwork planner for creating tasks, subjects, friends, chats, and profile details.',
+      'When you sign in, the app uses your email address to create and secure your account. App content you save may be synced with the cloud database so it can be available across your devices.',
+      'Profile names, usernames, avatars, friend requests, chat rooms, messages, subjects, and tasks are used only to provide the app features shown on this site.',
+      'Do not enter passwords from other services. This sign-in form is only for your School App account.',
+    ],
+  },
+  terms: {
+    title: 'Terms',
+    body: [
+      'Use School App only for your own schoolwork, planning, and communication with people you know.',
+      'You are responsible for the information you add to tasks, profile fields, subjects, friends, and chats.',
+      'Do not use the app to impersonate another person, collect someone else’s credentials, post harmful content, or misuse the service.',
+      'The app is provided as a school planner and may change as features are improved.',
+    ],
+  },
+  contact: {
+    title: 'Contact',
+    body: [
+      SUPPORT_EMAIL
+        ? `For support, questions, or account help, contact ${SUPPORT_EMAIL}.`
+        : 'For support, questions, or account help, contact the owner or administrator who gave you access to this app.',
+      'If you believe this website has been flagged incorrectly, report it to the app owner so they can review the deployment and request a Google Safe Browsing review.',
+    ],
+  },
+};
+
 // A palette of pickable primary colors for the custom-theme builder. Users
 // can also type a hex code manually.
 const CUSTOM_COLOR_OPTIONS = [
@@ -61,11 +93,13 @@ export default function SettingsSheet({
   // Local draft synced each time Settings opens; only Confirm applies it.
   const [builderOpen, setBuilderOpen] = useState(false);
   const [draftThemeKey, setDraftThemeKey] = useState(themeKey);
+  const [legalPage, setLegalPage] = useState(null);
   const initialThemeKeyRef = useRef(themeKey);
 
   useEffect(() => {
     if (visible) {
       setBuilderOpen(false);
+      setLegalPage(null);
       setDraftThemeKey(themeKey);
       initialThemeKeyRef.current = themeKey;
     }
@@ -166,6 +200,27 @@ export default function SettingsSheet({
                   </View>
                   <Text style={styles.changelogChevron}>›</Text>
                 </Pressable>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.legalGrid}>
+                    {Object.keys(LEGAL_CONTENT).map((key) => (
+                      <Pressable
+                        key={key}
+                        onPress={() => setLegalPage(key)}
+                        accessibilityRole="button"
+                        style={styles.legalCard}
+                      >
+                        <Text style={styles.legalCardTitle}>{LEGAL_CONTENT[key].title}</Text>
+                        <Text style={styles.hint} numberOfLines={2}>
+                          {key === 'privacy'
+                            ? 'How account and app data are used.'
+                            : key === 'terms'
+                              ? 'Rules for using School App.'
+                              : 'Support and ownership information.'}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -218,6 +273,14 @@ export default function SettingsSheet({
               setBuilderOpen(false);
             }}
           />
+
+          {Platform.OS === 'web' ? (
+            <LegalModal
+              page={legalPage}
+              styles={styles}
+              onClose={() => setLegalPage(null)}
+            />
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -537,6 +600,32 @@ function SegmentButton({ label, active, onPress, styles }) {
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function LegalModal({ page, styles, onClose }) {
+  const content = page ? LEGAL_CONTENT[page] : null;
+  return (
+    <Modal visible={!!content} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.legalBackdrop}>
+        <Pressable style={styles.backdropFill} onPress={onClose} />
+        <View style={styles.legalPanel}>
+          <View style={styles.legalHeader}>
+            <Text style={styles.legalTitle}>{content?.title}</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={styles.legalClose}>Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.legalBody}>
+            {content?.body.map((paragraph, index) => (
+              <Text key={index} style={styles.legalParagraph}>
+                {paragraph}
+              </Text>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -880,5 +969,73 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
       fontSize: 22,
       lineHeight: 22,
+    },
+    legalGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    legalCard: {
+      flexGrow: 1,
+      flexBasis: 180,
+      minHeight: 82,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: spacing.md,
+      justifyContent: 'center',
+      gap: spacing.xs,
+    },
+    legalCardTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    legalBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    legalPanel: {
+      width: '100%',
+      maxWidth: 560,
+      maxHeight: '82%',
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      overflow: 'hidden',
+    },
+    legalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    legalTitle: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '900',
+    },
+    legalClose: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    legalBody: {
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    legalParagraph: {
+      color: colors.text,
+      fontSize: 14,
+      lineHeight: 21,
     },
   });
