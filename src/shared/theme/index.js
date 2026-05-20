@@ -12,7 +12,7 @@
 // Static things (spacing, radius) don't change with the theme, but we still
 // surface them through useTheme() so callers have one import.
 
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
 
@@ -502,6 +502,7 @@ export function ThemeProvider({ children }) {
   const [customThemes, setCustomThemes] = useState([]);
   const [hydrated, setHydrated] = useState(false);
   const [activeUserId, setActiveUserId] = useState(isSupabaseConfigured ? undefined : null);
+  const skipNextPersistRef = useRef(true);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -525,6 +526,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     if (activeUserId === undefined) return;
     let cancelled = false;
+    skipNextPersistRef.current = true;
     setHydrated(false);
     (async () => {
       try {
@@ -612,6 +614,10 @@ export function ThemeProvider({ children }) {
   // Local mode: write bare AsyncStorage keys.
   useEffect(() => {
     if (!hydrated || activeUserId === undefined) return;
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
     (async () => {
       try {
         const uid = activeUserId;

@@ -76,6 +76,22 @@ function runQueued(fn) {
 }
 
 let _flushChain = Promise.resolve();
+const REMOTE_CACHE_TTL_MS = 30_000;
+const remoteMemoryCache = new Map();
+
+function readFreshRemoteCache(key) {
+  const cached = remoteMemoryCache.get(key);
+  if (!cached || Date.now() - cached.savedAt > REMOTE_CACHE_TTL_MS) return null;
+  return cached.value;
+}
+
+function writeRemoteCache(key, value) {
+  remoteMemoryCache.set(key, { value, savedAt: Date.now() });
+}
+
+function clearRemoteCache(...keys) {
+  keys.forEach((key) => remoteMemoryCache.delete(key));
+}
 
 // ── Normalizers ────────────────────────────────────────────────────────────
 
@@ -412,26 +428,30 @@ function safeParseArray(raw) {
 
 // ── Tasks ──────────────────────────────────────────────────────────────────
 
+async function loadCloudTasks(uid) {
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    const tasks = (data || []).map(rowToTask);
+    AsyncStorage.setItem(tasksKey(uid), JSON.stringify(tasks)).catch(() => {});
+    return tasks;
+  } catch (e) {
+    console.warn('Supabase loadTasks failed, falling back to cache:', e?.message);
+    return readLocalArray(tasksKey(uid));
+  }
+}
+
 export async function loadTasks() {
   const uid = await cloudMode();
 
   if (uid) {
     await migrateLegacyIfNeeded(uid);
     await flushPendingWrites(uid);
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      const tasks = (data || []).map(rowToTask);
-      AsyncStorage.setItem(tasksKey(uid), JSON.stringify(tasks)).catch(() => {});
-      return tasks;
-    } catch (e) {
-      console.warn('Supabase loadTasks failed, falling back to cache:', e?.message);
-      return readLocalArray(tasksKey(uid));
-    }
+    return loadCloudTasks(uid);
   }
 
   return readLocalArray(tasksKey(null));
@@ -509,31 +529,39 @@ async function updateLocalTaskCache(uid, mutator) {
 
 // ── Subjects ───────────────────────────────────────────────────────────────
 
+async function loadCloudSubjects(uid) {
+  try {
+    const { data, error } = await supabase
+      .from('subjects')
+      .select('*')
+      .eq('user_id', uid)
+      .order('name', { ascending: true });
+    if (error) throw error;
+    const subjects = (data || []).map(rowToSubject).filter(Boolean);
+    AsyncStorage.setItem(subjectsKey(uid), JSON.stringify(subjects)).catch(() => {});
+    return subjects;
+  } catch (e) {
+    console.warn('Supabase loadSubjects failed, falling back to cache:', e?.message);
+    const cached = await readLocalArray(subjectsKey(uid));
+    return cached.map(normalizeSubject).filter(Boolean);
+  }
+}
+
+async function loadLocalSubjects(uid) {
+  const cached = await readLocalArray(subjectsKey(uid));
+  return cached.map(normalizeSubject).filter(Boolean);
+}
+
 export async function loadSubjects() {
   const uid = await cloudMode();
 
   if (uid) {
     await migrateLegacyIfNeeded(uid);
     await flushPendingWrites(uid);
-    try {
-      const { data, error } = await supabase
-        .from('subjects')
-        .select('*')
-        .eq('user_id', uid)
-        .order('name', { ascending: true });
-      if (error) throw error;
-      const subjects = (data || []).map(rowToSubject).filter(Boolean);
-      AsyncStorage.setItem(subjectsKey(uid), JSON.stringify(subjects)).catch(() => {});
-      return subjects;
-    } catch (e) {
-      console.warn('Supabase loadSubjects failed, falling back to cache:', e?.message);
-      const cached = await readLocalArray(subjectsKey(uid));
-      return cached.map(normalizeSubject).filter(Boolean);
-    }
+    return loadCloudSubjects(uid);
   }
 
-  const cached = await readLocalArray(subjectsKey(null));
-  return cached.map(normalizeSubject).filter(Boolean);
+  return loadLocalSubjects(null);
 }
 
 // Insert / update a subject. If `previousName` differs from `subject.name`
@@ -621,49 +649,79 @@ async function updateLocalSubjectCache(uid, mutator) {
 
 // ── User name (profile) ────────────────────────────────────────────────────
 
+async function loadCloudProfile(uid) {
+  try {
+    // NOTE: maybeSingle() (not single()) is intentional. The profile row
+    // is created by a database trigger on sign-up, but users that signed
+    // up before the trigger was deployed have no row. maybeSingle() lets
+    // us return '' in that case rather than surfacing an error -- the
+    // first saveUserName() call will then create the row via upsert.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, username, avatar_type, avatar_value')
+      .eq('id', uid)
+      .maybeSingle();
+    if (error) throw error;
+    const profile = rowToProfile(data, uid);
+    AsyncStorage.setItem(userNameKey(uid), profile.name).catch(() => {});
+    writeLocalObject(profileKey(uid), profile).catch(() => {});
+    return profile;
+  } catch (e) {
+    console.warn('Supabase loadProfile failed, falling back to cache:', e?.message);
+    try {
+      const cached = await readLocalObject(profileKey(uid));
+      if (cached) return rowToProfile(cached, uid);
+      const name = (await AsyncStorage.getItem(userNameKey(uid))) ?? '';
+      return rowToProfile({ id: uid, name }, uid);
+    } catch {
+      return rowToProfile({ id: uid }, uid);
+    }
+  }
+}
+
+async function loadLocalProfile(uid) {
+  try {
+    const cached = await readLocalObject(profileKey(uid));
+    if (cached) return rowToProfile(cached, uid);
+    const name = (await AsyncStorage.getItem(userNameKey(uid))) ?? '';
+    return rowToProfile({ id: uid, name }, uid);
+  } catch (e) {
+    console.warn('Failed to load profile:', e);
+    return rowToProfile(uid ? { id: uid } : {}, uid);
+  }
+}
+
 export async function loadProfile() {
   const uid = await cloudMode();
 
   if (uid) {
     await flushPendingWrites(uid);
-    try {
-      // NOTE: maybeSingle() (not single()) is intentional. The profile row
-      // is created by a database trigger on sign-up, but users that signed
-      // up before the trigger was deployed have no row. maybeSingle() lets
-      // us return '' in that case rather than surfacing an error -- the
-      // first saveUserName() call will then create the row via upsert.
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, username, avatar_type, avatar_value')
-        .eq('id', uid)
-        .maybeSingle();
-      if (error) throw error;
-      const profile = rowToProfile(data, uid);
-      AsyncStorage.setItem(userNameKey(uid), profile.name).catch(() => {});
-      writeLocalObject(profileKey(uid), profile).catch(() => {});
-      return profile;
-    } catch (e) {
-      console.warn('Supabase loadProfile failed, falling back to cache:', e?.message);
-      try {
-        const cached = await readLocalObject(profileKey(uid));
-        if (cached) return rowToProfile(cached, uid);
-        const name = (await AsyncStorage.getItem(userNameKey(uid))) ?? '';
-        return rowToProfile({ id: uid, name }, uid);
-      } catch {
-        return rowToProfile({ id: uid }, uid);
-      }
-    }
+    return loadCloudProfile(uid);
   }
 
-  try {
-    const cached = await readLocalObject(profileKey(null));
-    if (cached) return rowToProfile(cached, null);
-    const name = (await AsyncStorage.getItem(userNameKey(null))) ?? '';
-    return rowToProfile({ name }, null);
-  } catch (e) {
-    console.warn('Failed to load profile:', e);
-    return rowToProfile({}, null);
+  return loadLocalProfile(null);
+}
+
+export async function loadAppData() {
+  const uid = await cloudMode();
+
+  if (uid) {
+    await migrateLegacyIfNeeded(uid);
+    await flushPendingWrites(uid);
+    const [tasks, subjects, profile] = await Promise.all([
+      loadCloudTasks(uid),
+      loadCloudSubjects(uid),
+      loadCloudProfile(uid),
+    ]);
+    return { tasks, subjects, profile };
   }
+
+  const [tasks, subjects, profile] = await Promise.all([
+    readLocalArray(tasksKey(null)),
+    loadLocalSubjects(null),
+    loadLocalProfile(null),
+  ]);
+  return { tasks, subjects, profile };
 }
 
 export async function saveProfile(profile) {
@@ -724,12 +782,16 @@ export async function loadFriends() {
   if (!uid) return [];
 
   try {
+    const cacheKey = `friends:${uid}`;
+    const cached = readFreshRemoteCache(cacheKey);
+    if (cached) return cached;
     const { data, error } = await supabase.rpc('list_friends');
     if (error) throw error;
     const friends = (data || []).map((row) => ({
       ...rowToProfile(row, row.id),
       friendedAt: row.friended_at ?? null,
     }));
+    writeRemoteCache(cacheKey, friends);
     writeLocalArray(`@simpleapp:friends:${uid}:v1`, friends).catch(() => {});
     return friends;
   } catch (e) {
@@ -749,6 +811,9 @@ export async function loadFriendRequests() {
   if (!uid) return { incoming: [], outgoing: [] };
 
   try {
+    const cacheKey = `friendRequests:${uid}`;
+    const cached = readFreshRemoteCache(cacheKey);
+    if (cached) return cached;
     const { data, error } = await supabase.rpc('list_friend_requests');
     if (error) throw error;
     const items = (data || []).map((row) => ({
@@ -762,6 +827,7 @@ export async function loadFriendRequests() {
       incoming: items.filter((item) => item.direction === 'incoming'),
       outgoing: items.filter((item) => item.direction === 'outgoing'),
     };
+    writeRemoteCache(cacheKey, grouped);
     writeLocalObject(`@simpleapp:friendRequests:${uid}:v1`, grouped).catch(() => {});
     return grouped;
   } catch (e) {
@@ -787,6 +853,7 @@ export async function addFriend(friendId) {
   if (!uid || !friendId || friendId === uid) return;
   const { error } = await supabase.rpc('add_friend', { friend_profile_id: friendId });
   if (error) throw error;
+  clearRemoteCache(`friends:${uid}`, `friendRequests:${uid}`);
 }
 
 export async function acceptFriendRequest(requesterId) {
@@ -796,6 +863,7 @@ export async function acceptFriendRequest(requesterId) {
     requester_profile_id: requesterId,
   });
   if (error) throw error;
+  clearRemoteCache(`friends:${uid}`, `friendRequests:${uid}`);
 }
 
 export async function declineFriendRequest(requesterId) {
@@ -805,6 +873,7 @@ export async function declineFriendRequest(requesterId) {
     requester_profile_id: requesterId,
   });
   if (error) throw error;
+  clearRemoteCache(`friendRequests:${uid}`);
 }
 
 export async function removeFriend(friendId) {
@@ -812,6 +881,7 @@ export async function removeFriend(friendId) {
   if (!uid || !friendId) return;
   const { error } = await supabase.rpc('remove_friend', { friend_profile_id: friendId });
   if (error) throw error;
+  clearRemoteCache(`friends:${uid}`, `friendRequests:${uid}`);
 }
 
 // Chat rooms
@@ -878,9 +948,13 @@ export async function loadChatRooms() {
   if (!uid) return [];
 
   try {
+    const cacheKey = `chatRooms:${uid}`;
+    const cached = readFreshRemoteCache(cacheKey);
+    if (cached) return cached;
     const { data, error } = await supabase.rpc('list_chat_rooms');
     if (error) throw error;
     const rooms = (data || []).map(rowToChatRoom);
+    writeRemoteCache(cacheKey, rooms);
     writeLocalArray(chatRoomsKey(uid), rooms).catch(() => {});
     return rooms;
   } catch (e) {
@@ -904,6 +978,7 @@ export async function createChatRoom({ name, friendIds, lifetimeHours }) {
     lifetime_hours: Number(lifetimeHours) || 24,
   });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`);
   return data;
 }
 
@@ -915,6 +990,7 @@ export async function renameChatRoom(roomId, name) {
     room_name: String(name || '').trim(),
   });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`, `chatMessages:${uid}:${roomId}`);
 }
 
 export async function addChatParticipants(roomId, friendIds) {
@@ -925,6 +1001,7 @@ export async function addChatParticipants(roomId, friendIds) {
     friend_ids: Array.isArray(friendIds) ? friendIds : [],
   });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`, `chatMessages:${uid}:${roomId}`);
 }
 
 export async function loadChatMessages(roomId) {
@@ -932,11 +1009,15 @@ export async function loadChatMessages(roomId) {
   if (!uid || !roomId) return [];
 
   try {
+    const cacheKey = `chatMessages:${uid}:${roomId}`;
+    const cached = readFreshRemoteCache(cacheKey);
+    if (cached) return cached;
     const { data, error } = await supabase.rpc('list_chat_messages', {
       room_profile_id: roomId,
     });
     if (error) throw error;
     const messages = (data || []).map(rowToChatMessage);
+    writeRemoteCache(cacheKey, messages);
     writeLocalArray(chatMessagesKey(uid, roomId), messages).catch(() => {});
     return messages;
   } catch (e) {
@@ -959,6 +1040,7 @@ export async function sendChatMessage(roomId, body) {
     message_body: String(body || ''),
   });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`, `chatMessages:${uid}:${roomId}`);
   return data;
 }
 
@@ -967,6 +1049,7 @@ export async function markChatRead(roomId) {
   if (!uid || !roomId) return;
   const { error } = await supabase.rpc('mark_chat_read', { room_profile_id: roomId });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`);
 }
 
 export async function setChatPinned(roomId, pinned) {
@@ -977,6 +1060,7 @@ export async function setChatPinned(roomId, pinned) {
     pinned: !!pinned,
   });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`);
 }
 
 export async function hideChatRoom(roomId) {
@@ -984,6 +1068,7 @@ export async function hideChatRoom(roomId) {
   if (!uid || !roomId) return;
   const { error } = await supabase.rpc('hide_chat_room', { room_profile_id: roomId });
   if (error) throw error;
+  clearRemoteCache(`chatRooms:${uid}`, `chatMessages:${uid}:${roomId}`);
 }
 
 export function subscribeToChatRoom(roomId, onChange) {
@@ -998,7 +1083,13 @@ export function subscribeToChatRoom(roomId, onChange) {
         table: 'chat_messages',
         filter: `room_id=eq.${roomId}`,
       },
-      () => onChange()
+      () => {
+        currentUserId()
+          .then((uid) => {
+            if (uid) clearRemoteCache(`chatRooms:${uid}`, `chatMessages:${uid}:${roomId}`);
+          })
+          .finally(() => onChange());
+      }
     )
     .subscribe();
 
@@ -1021,6 +1112,7 @@ export function subscribeToFriendRequests(userId, onChange) {
       },
       (payload) => {
         const next = payload?.new;
+        clearRemoteCache(`friendRequests:${userId}`);
         if (!next || next.status === 'pending') onChange(next || payload);
       }
     )
@@ -1044,7 +1136,10 @@ export function subscribeToChatNotifications(userId, onMessage) {
       },
       (payload) => {
         const row = payload?.new;
-        if (row?.sender_id && row.sender_id !== userId) onMessage(row);
+        if (row?.sender_id && row.sender_id !== userId) {
+          clearRemoteCache(`chatRooms:${userId}`);
+          onMessage(row);
+        }
       }
     )
     .subscribe();
