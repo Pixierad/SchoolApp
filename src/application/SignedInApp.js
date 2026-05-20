@@ -833,50 +833,52 @@ export default function SignedInApp({ session, setSession }) {
                 </Pressable>
               </View>
             </View>
-            {renderedDesktopPage === 'subjects' ? (
-              <SubjectManager
-                visible
-                embedded
-                subjects={subjects}
-                onChange={updateSubjects}
-                onClose={() => navigateDesktopPage('tasks')}
-                taskCountsBySubject={taskCountsBySubject}
-              />
-            ) : null}
-            {renderedDesktopPage === 'friends' ? (
-              <FriendsSheet
-                visible
-                embedded
-                onClose={() => navigateDesktopPage('tasks')}
-                session={session}
-              />
-            ) : null}
-            {renderedDesktopPage === 'chats' ? (
-              <ChatSheet
-                visible
-                embedded
-                activeRoomId={desktopChatRoomId}
-                onRoomChange={(roomId) => navigateDesktopPage('chats', roomId)}
-                onClose={() => navigateDesktopPage('tasks')}
-                session={session}
-                profile={profile}
-              />
-            ) : null}
-            {renderedDesktopPage === 'settings' ? (
-              <SettingsSheet
-                visible
-                embedded
-                onClose={() => navigateDesktopPage('tasks')}
-                session={session}
-                onSignOut={handleSignOut}
-                enhanceMotion={enhanceMotion}
-                onEnhanceMotionChange={handleEnhanceMotionChange}
-                onShowChangelog={() => {
-                  navigateDesktopPage('tasks');
-                  setTimeout(openChangelog, 250);
-                }}
-              />
-            ) : null}
+            <Suspense fallback={<DesktopPageFallback styles={styles} colors={colors} />}>
+              {renderedDesktopPage === 'subjects' ? (
+                <SubjectManager
+                  visible
+                  embedded
+                  subjects={subjects}
+                  onChange={updateSubjects}
+                  onClose={() => navigateDesktopPage('tasks')}
+                  taskCountsBySubject={taskCountsBySubject}
+                />
+              ) : null}
+              {renderedDesktopPage === 'friends' ? (
+                <FriendsSheet
+                  visible
+                  embedded
+                  onClose={() => navigateDesktopPage('tasks')}
+                  session={session}
+                />
+              ) : null}
+              {renderedDesktopPage === 'chats' ? (
+                <ChatSheet
+                  visible
+                  embedded
+                  activeRoomId={desktopChatRoomId}
+                  onRoomChange={(roomId) => navigateDesktopPage('chats', roomId)}
+                  onClose={() => navigateDesktopPage('tasks')}
+                  session={session}
+                  profile={profile}
+                />
+              ) : null}
+              {renderedDesktopPage === 'settings' ? (
+                <SettingsSheet
+                  visible
+                  embedded
+                  onClose={() => navigateDesktopPage('tasks')}
+                  session={session}
+                  onSignOut={handleSignOut}
+                  enhanceMotion={enhanceMotion}
+                  onEnhanceMotionChange={handleEnhanceMotionChange}
+                  onShowChangelog={() => {
+                    navigateDesktopPage('tasks');
+                    setTimeout(openChangelog, 250);
+                  }}
+                />
+              ) : null}
+            </Suspense>
           </Animated.View>
         ) : (
           <Animated.View
@@ -1144,6 +1146,14 @@ function subjectShallowEqual(a, b) {
   );
 }
 
+function DesktopPageFallback({ styles, colors }) {
+  return (
+    <View style={styles.desktopPageFallback}>
+      <ActivityIndicator color={colors.primary} />
+    </View>
+  );
+}
+
 function LoadingSkeleton({ styles, isDesktopWeb }) {
   const rows = isDesktopWeb ? [0, 1, 2, 3, 4] : [0, 1, 2];
   return (
@@ -1221,6 +1231,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
+    },
+    desktopPageFallback: {
+      flex: 1,
+      minHeight: 320,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     desktopSidebar: {
       position: 'absolute',

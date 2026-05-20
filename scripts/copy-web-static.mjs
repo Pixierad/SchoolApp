@@ -12,6 +12,12 @@ if (existsSync(source)) {
   await cp(source, target, { recursive: true });
 }
 
+const vercelConfig = resolve(root, 'vercel.json');
+if (existsSync(vercelConfig)) {
+  await mkdir(target, { recursive: true });
+  await cp(vercelConfig, resolve(target, 'vercel.json'));
+}
+
 const indexPath = resolve(target, 'index.html');
 if (existsSync(indexPath)) {
   let html = await readFile(indexPath, 'utf8');

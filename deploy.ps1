@@ -150,6 +150,7 @@ try {
     # --clear wipes Metro's transform cache so changes to env vars actually
     # produce a new bundle (otherwise Metro reuses the cached one).
     npx expo export --platform web --clear
+    node .\scripts\copy-web-static.mjs
 } finally {
     if (Test-Path $envFile) { Remove-Item $envFile -Force }
 }
