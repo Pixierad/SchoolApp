@@ -285,44 +285,83 @@ export default function TaskForm({
             <View style={styles.field}>
               <Text style={styles.label}>Due date</Text>
               {Platform.OS === 'web' ? (
-                <View style={styles.dateButton}>
-                  <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
-                    {dueDate ? relativeLabel(dueDate) : 'No due date'}
-                  </Text>
-                  {dueDate ? (
-                    <Pressable
-                      onPress={() => setDueDate(null)}
-                      hitSlop={8}
-                      style={styles.clearBtnWeb}
-                    >
-                      <Text style={styles.clearText}>Clear</Text>
-                    </Pressable>
-                  ) : (
-                    <Text style={styles.dateHint}>Tap to set</Text>
-                  )}
-                  <input
-                    type="date"
-                    value={dueDate || ''}
-                    min="2000-01-01"
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDueDate(val ? val : null);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      opacity: 0,
-                      cursor: 'pointer',
-                      border: 'none',
-                      padding: 0,
-                      margin: 0,
-                      background: 'transparent',
-                    }}
-                  />
-                </View>
+                desktopWeb ? (
+                  <View style={styles.desktopDateGroup}>
+                    <View style={styles.desktopDateRow}>
+                      <input
+                        type="date"
+                        value={dueDate || ''}
+                        min="2000-01-01"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDueDate(val ? val : null);
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          minHeight: 48,
+                          borderRadius: radius.md,
+                          border: `1px solid ${colors.border}`,
+                          background: colors.card,
+                          color: colors.text,
+                          padding: `0 ${spacing.md}px`,
+                          fontSize: 16,
+                          fontFamily: 'inherit',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          colorScheme: isDark ? 'dark' : 'light',
+                        }}
+                      />
+                      {dueDate ? (
+                        <Pressable onPress={() => setDueDate(null)} style={styles.clearDateBtnDesktop}>
+                          <Text style={styles.clearText}>Clear</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
+                      {dueDate ? relativeLabel(dueDate) : 'No due date'}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.dateButton}>
+                    <Text style={[styles.dateText, !dueDate && styles.dateTextMuted]}>
+                      {dueDate ? relativeLabel(dueDate) : 'No due date'}
+                    </Text>
+                    {dueDate ? (
+                      <Pressable
+                        onPress={() => setDueDate(null)}
+                        hitSlop={8}
+                        style={styles.clearBtnWeb}
+                      >
+                        <Text style={styles.clearText}>Clear</Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.dateHint}>Tap to set</Text>
+                    )}
+                    <input
+                      type="date"
+                      value={dueDate || ''}
+                      min="2000-01-01"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDueDate(val ? val : null);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        border: 'none',
+                        padding: 0,
+                        margin: 0,
+                        background: 'transparent',
+                      }}
+                    />
+                  </View>
+                )
               ) : (
                 <>
                   <Pressable
@@ -692,6 +731,22 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.md,
       position: 'relative',
       overflow: 'hidden',
+    },
+    desktopDateGroup: {
+      gap: spacing.xs,
+    },
+    desktopDateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    clearDateBtnDesktop: {
+      minHeight: 48,
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+      paddingHorizontal: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     clearBtnWeb: {
       position: 'relative',
