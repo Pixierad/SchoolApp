@@ -1,1 +1,1 @@
-export { default } from './src/application/AppRoot';
+export { default } from './apps/mobile/MobileApp';

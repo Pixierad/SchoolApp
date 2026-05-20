@@ -20,12 +20,18 @@ A clean Expo app for tracking schoolwork across web and mobile. Create tasks, ta
 
 ```text
 SchoolApp/
-|-- App.js                         Expo entry point
+|-- App.js                         Native/mobile entry point -> apps/mobile
+|-- App.web.js                     Website entry point -> apps/website
 |-- app.json                       Expo app config
 |-- package.json                   Web/mobile scripts and dependencies
 |-- deploy.ps1                     Signed commit, web export, and Vercel deploy helper
 |-- supabase-setup.sql             Supabase tables, RLS policies, indexes, profile trigger
 |-- vercel.json                    Vercel static hosting config
+|-- apps/
+|   |-- mobile/                    Expo / React Native app shell
+|   `-- website/                   Desktop web shell and route ownership
+|-- packages/
+|   `-- core/                      Shared data/domain exports for app + website
 |-- assets/                        App icons and splash assets
 `-- src/
     |-- application/               Root orchestration, app chrome, notification helpers
@@ -61,13 +67,13 @@ Then run the SQL in `supabase-setup.sql` inside the Supabase SQL Editor. It crea
 Start the web app:
 
 ```powershell
-npm run dev:web
+npm run dev:website
 ```
 
 Start the mobile app:
 
 ```powershell
-npm run dev:mobile
+npm run dev:app
 ```
 
 ## Data Model
