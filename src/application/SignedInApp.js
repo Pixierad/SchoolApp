@@ -805,7 +805,7 @@ export default function SignedInApp({ session, setSession }) {
                   hitSlop={8}
                   accessibilityLabel="Open notifications"
                 >
-                  <Text style={styles.desktopHeaderBtnText}>Alerts</Text>
+                  <Text style={styles.desktopHeaderIconText}>{'\u{1F514}'}</Text>
                   {notifications.length > 0 ? (
                     <View style={styles.notificationBadge}>
                       <Text style={styles.notificationBadgeText}>
@@ -820,7 +820,7 @@ export default function SignedInApp({ session, setSession }) {
                   hitSlop={8}
                   accessibilityLabel="Open settings"
                 >
-                  <Text style={styles.desktopHeaderBtnText}>Settings</Text>
+                  <Text style={styles.desktopHeaderIconText}>{'\u2699\uFE0F'}</Text>
                 </Pressable>
                 <Pressable
                   onPress={openChangelog}
@@ -828,7 +828,7 @@ export default function SignedInApp({ session, setSession }) {
                   hitSlop={8}
                   accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
                 >
-                  <Text style={styles.desktopHeaderBtnText}>Updates</Text>
+                  <Text style={styles.desktopHeaderIconText}>{'\u{1F4DC}'}</Text>
                   {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
                 </Pressable>
               </View>
@@ -1530,6 +1530,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       color: colors.textMuted,
       fontSize: 12,
       fontWeight: '900',
+    },
+    desktopHeaderIconText: {
+      fontSize: 18,
+      lineHeight: 22,
     },
     greeting: {
       ...typography.caption,
