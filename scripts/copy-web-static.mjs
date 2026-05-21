@@ -12,11 +12,24 @@ if (existsSync(source)) {
   await cp(source, target, { recursive: true });
 }
 
-const vercelConfig = resolve(root, 'vercel.json');
-if (existsSync(vercelConfig)) {
-  await mkdir(target, { recursive: true });
-  await cp(vercelConfig, resolve(target, 'vercel.json'));
-}
+const staticVercelConfig = {
+  $schema: 'https://openapi.vercel.sh/vercel.json',
+  cleanUrls: true,
+  rewrites: [
+    { source: '/login', destination: '/' },
+    { source: '/settings', destination: '/' },
+    { source: '/chats', destination: '/' },
+    { source: '/chats/:path*', destination: '/' },
+    { source: '/subjects', destination: '/' },
+    { source: '/friends', destination: '/' },
+  ],
+};
+
+await mkdir(target, { recursive: true });
+await writeFile(
+  resolve(target, 'vercel.json'),
+  `${JSON.stringify(staticVercelConfig, null, 2)}\n`
+);
 
 const indexPath = resolve(target, 'index.html');
 if (existsSync(indexPath)) {

@@ -13,6 +13,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build": "npm run build:web",
     "build:website": "expo export --platform web && node ./scripts/copy-web-static.mjs",
     "build:web": "expo export --platform web && node ./scripts/copy-web-static.mjs",
     "check:website": "expo export --platform web --clear && node ./scripts/copy-web-static.mjs",
