@@ -53,7 +53,7 @@ export function BottomActionBar({
       />
       <BarButton
         label="Subjects"
-        icon="📚"
+        icon={'\u{1F4DA}'}
         accessibilityLabel="Manage subjects"
         onPress={onSubjects}
         styles={styles}
@@ -68,14 +68,14 @@ export function BottomActionBar({
       </Pressable>
       <BarButton
         label="Friends"
-        icon="👥"
+        icon={'\u{1F465}'}
         accessibilityLabel="Open friends"
         onPress={onFriends}
         styles={styles}
       />
       <BarButton
         label="Chats"
-        icon="💬"
+        icon={'\u{1F4AC}'}
         accessibilityLabel="Open chats"
         onPress={onChats}
         styles={styles}
@@ -321,7 +321,7 @@ export function ProgressCard({ progress, styles }) {
         <Text style={styles.progressLabel}>Progress</Text>
         <Text style={styles.progressText}>
           {total === 0
-            ? 'No tasks or events yet — add one to get started.'
+            ? 'No tasks or events yet \u2014 add one to get started.'
             : `${doneCount} of ${total} done (${pct}%)`}
         </Text>
         <View style={styles.progressTrack}>

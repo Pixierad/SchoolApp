@@ -50,7 +50,7 @@ const LEGAL_CONTENT = {
     body: [
       'Use School App only for your own schoolwork, planning, and communication with people you know.',
       'You are responsible for the information you add to tasks, profile fields, subjects, friends, and chats.',
-      'Do not use the app to impersonate another person, collect someone else’s credentials, post harmful content, or misuse the service.',
+      "Do not use the app to impersonate another person, collect someone else\u2019s credentials, post harmful content, or misuse the service.",
       'The app is provided as a school planner and may change as features are improved.',
     ],
   },
@@ -176,7 +176,7 @@ export default function AuthScreen({ onLocalAdminSignIn }) {
           setInfo(
             REQUIRE_EMAIL_CONFIRMATION
               ? 'Check your email for a confirmation link, then sign in.'
-              : 'Almost there — check your inbox to confirm your email, then sign in.'
+              : 'Almost there \u2014 check your inbox to confirm your email, then sign in.'
           );
           setPwMode('signin');
           setPassword('');
@@ -237,7 +237,7 @@ export default function AuthScreen({ onLocalAdminSignIn }) {
       if (err) throw err;
       // Success -- the root auth listener takes over.
     } catch (e) {
-      setError(e?.message || 'That code didn’t work. Try again.');
+      setError(e?.message || 'That code didn\u2019t work. Try again.');
     } finally {
       setBusy(false);
     }
@@ -263,7 +263,7 @@ export default function AuthScreen({ onLocalAdminSignIn }) {
   const subtitle =
     authMethod === 'otp'
       ? otpStep === 'email'
-        ? 'We’ll email you a 6-digit code — no password needed.'
+        ? 'We\u2019ll email you a 6-digit code \u2014 no password needed.'
         : `Check ${trimmedEmail || 'your inbox'} for the 6-digit code.`
       : isSignIn
       ? 'Sign in to sync your tasks across devices.'

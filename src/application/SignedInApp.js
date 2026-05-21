@@ -935,7 +935,7 @@ export default function SignedInApp({ session, setSession }) {
             hitSlop={8}
             accessibilityLabel="Open settings"
           >
-            <Text style={styles.iconBtnText}>⚙️</Text>
+            <Text style={styles.iconBtnText}>{'\u2699\uFE0F'}</Text>
           </Pressable>
           <Pressable
             onPress={openChangelog}
@@ -943,7 +943,7 @@ export default function SignedInApp({ session, setSession }) {
             hitSlop={8}
             accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
           >
-            <Text style={styles.iconBtnText}>📜</Text>
+            <Text style={styles.iconBtnText}>{'\u{1F4DC}'}</Text>
             {hasUnreadChangelog ? <View style={styles.unreadDot} /> : null}
           </Pressable>
         </View>

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
 
-export default function EmptyState({ title, subtitle, icon = '📚' }) {
+export default function EmptyState({ title, subtitle, icon = '\u{1F4DA}' }) {
   const { colors, spacing, radius, typography } = useTheme();
   const styles = useMemo(
     () => makeStyles({ colors, spacing, radius, typography }),

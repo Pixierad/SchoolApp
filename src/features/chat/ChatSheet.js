@@ -569,7 +569,7 @@ function CreateView({
                 </Text>
               </View>
               <View style={[styles.checkCircle, selected && styles.checkCircleSelected]}>
-                {selected ? <Text style={styles.checkText}>✓</Text> : null}
+                {selected ? <Text style={styles.checkText}>{'\u2713'}</Text> : null}
               </View>
             </Pressable>
           );
@@ -1107,7 +1107,7 @@ function AddParticipantsPanel({
                     </Text>
                   </View>
                   <View style={[styles.checkCircle, selected && styles.checkCircleSelected]}>
-                    {selected ? <Text style={styles.checkText}>✓</Text> : null}
+                    {selected ? <Text style={styles.checkText}>{'\u2713'}</Text> : null}
                   </View>
                 </Pressable>
               );

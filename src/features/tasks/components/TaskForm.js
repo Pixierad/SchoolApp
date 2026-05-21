@@ -218,7 +218,7 @@ export default function TaskForm({
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Add more details — notes, pages, links, anything (optional)"
+                placeholder={'Add more details \u2014 notes, pages, links, anything (optional)'}
                 placeholderTextColor={colors.textFaint}
                 style={[styles.input, styles.inputMultiline]}
                 multiline
@@ -531,7 +531,7 @@ function SubjectDetails({ name, subjects, styles, colors, colorForSubject, isDar
           </View>
         ) : (
           <Text style={[styles.subjectDetailMetaValue, { color: colors.textMuted, fontSize: 12 }]}>
-            No room or teacher set — tap "Manage" to add them.
+            {'No room or teacher set \u2014 tap "Manage" to add them.'}
           </Text>
         )}
       </View>

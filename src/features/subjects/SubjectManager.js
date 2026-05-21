@@ -233,7 +233,7 @@ export default function SubjectManager({
                     hitSlop={8}
                     style={styles.removeBtn}
                   >
-                    <Text style={styles.removeText}>Ã—</Text>
+                    <Text style={styles.removeText}>{'\u00D7'}</Text>
                   </Pressable>
                 </Pressable>
               );
@@ -321,7 +321,7 @@ export default function SubjectManager({
                       hitSlop={8}
                       style={styles.removeBtn}
                     >
-                      <Text style={styles.removeText}>×</Text>
+                      <Text style={styles.removeText}>{'\u00D7'}</Text>
                     </Pressable>
                   </Pressable>
                 );
@@ -351,7 +351,7 @@ function formatRowMeta(subject, count) {
   if (subject.room) parts.push(`Room ${subject.room}`);
   if (subject.teacher) parts.push(subject.teacher);
   parts.push(`${count} ${count === 1 ? 'task' : 'tasks'}`);
-  return parts.join(' · ');
+  return parts.join(' \u00B7 ');
 }
 
 function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, onSave }) {

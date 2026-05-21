@@ -39,7 +39,7 @@ const LEGAL_CONTENT = {
     body: [
       'Use School App only for your own schoolwork, planning, and communication with people you know.',
       'You are responsible for the information you add to tasks, profile fields, subjects, friends, and chats.',
-      'Do not use the app to impersonate another person, collect someone else’s credentials, post harmful content, or misuse the service.',
+      "Do not use the app to impersonate another person, collect someone else\u2019s credentials, post harmful content, or misuse the service.",
       'The app is provided as a school planner and may change as features are improved.',
     ],
   },
@@ -222,7 +222,7 @@ export default function SettingsSheet({
                     <Text style={styles.changelogTitle}>What's new</Text>
                     <Text style={styles.hint}>Recent updates and improvements.</Text>
                   </View>
-                  <Text style={styles.changelogChevron}>›</Text>
+                  <Text style={styles.changelogChevron}>{'\u203A'}</Text>
                 </Pressable>
                 {Platform.OS === 'web' ? (
                   <View style={styles.legalGrid}>
@@ -334,10 +334,12 @@ function ThemeTile({ preview, selected, onPress, onLongPress, styles }) {
       accessibilityRole="button"
     >
       <View style={styles.themeTileTop}>
-        <Text style={styles.themeTileEmoji}>{preview.emoji || (preview.isDark ? '🌑' : '🎨')}</Text>
+        <Text style={styles.themeTileEmoji}>
+          {preview.emoji || (preview.isDark ? '\u{1F311}' : '\u{1F3A8}')}
+        </Text>
         {selected ? (
           <View style={[styles.themeTileCheck, { backgroundColor: preview.primary }]}>
-            <Text style={styles.themeTileCheckText}>✓</Text>
+            <Text style={styles.themeTileCheckText}>{'\u2713'}</Text>
           </View>
         ) : null}
       </View>
@@ -349,7 +351,7 @@ function ThemeTile({ preview, selected, onPress, onLongPress, styles }) {
         </View>
       </View>
       <Text style={[styles.themeTileLabel, { color: preview.text }]} numberOfLines={1}>
-        {preview.label}{preview.isCustom ? ' ✨' : ''}
+        {preview.label}{preview.isCustom ? ' \u2728' : ''}
       </Text>
     </Pressable>
   );
@@ -491,13 +493,13 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
               <Text style={styles.sectionLabel}>Base</Text>
               <View style={styles.segment}>
                 <SegmentButton
-                  label="☀️  Light base"
+                  label={'\u2600\uFE0F  Light base'}
                   active={!baseIsDark}
                   onPress={() => setBaseIsDark(false)}
                   styles={styles}
                 />
                 <SegmentButton
-                  label="🌙  Dark base"
+                  label={'\u{1F319}  Dark base'}
                   active={baseIsDark}
                   onPress={() => setBaseIsDark(true)}
                   styles={styles}

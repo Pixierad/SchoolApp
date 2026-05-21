@@ -83,7 +83,7 @@ const DARK_SURFACE = {
 export const THEME_PRESETS = {
   light: {
     label: 'Light',
-    emoji: '☀️',
+    emoji: '\u2600\uFE0F',
     isDark: false,
     surface: LIGHT_SURFACE,
     primary: '#FF3E38',
@@ -92,7 +92,7 @@ export const THEME_PRESETS = {
   },
   dark: {
     label: 'Dark',
-    emoji: '🌙',
+    emoji: '\u{1F319}',
     isDark: true,
     surface: DARK_SURFACE,
     primary: '#FF3E38',
@@ -101,7 +101,7 @@ export const THEME_PRESETS = {
   },
   moody: {
     label: 'Moody',
-    emoji: '🔮',
+    emoji: '\u{1F52E}',
     isDark: true,
     surface: {
       bg: '#1A1022',
@@ -127,7 +127,7 @@ export const THEME_PRESETS = {
   },
   cute: {
     label: 'Cute',
-    emoji: '🌸',
+    emoji: '\u{1F338}',
     isDark: false,
     surface: {
       bg: '#FFF0F5',
@@ -153,7 +153,7 @@ export const THEME_PRESETS = {
   },
   midnight: {
     label: 'Midnight',
-    emoji: '✨',
+    emoji: '\u2728',
     isDark: true,
     surface: {
       bg: '#040814',
@@ -179,7 +179,7 @@ export const THEME_PRESETS = {
   },
   shadow: {
     label: 'Spooky',
-    emoji: '🗡️',
+    emoji: '\u{1F5E1}\uFE0F',
     isDark: true,
     surface: {
       bg: '#080808',
@@ -205,7 +205,7 @@ export const THEME_PRESETS = {
   },
   mint: {
     label: 'Fresh Mint',
-    emoji: '🌿',
+    emoji: '\u{1F33F}',
     isDark: false,
     surface: {
       bg: '#F0FAF6',
@@ -231,7 +231,7 @@ export const THEME_PRESETS = {
   },
   sunset: {
     label: 'Sunset',
-    emoji: '🌅',
+    emoji: '\u{1F305}',
     isDark: false,
     surface: {
       bg: '#FFF5EC',
@@ -458,7 +458,7 @@ export function makeCustomTheme({ name, baseIsDark, primary }) {
   return {
     key: `${CUSTOM_THEME_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     label: trimmedName,
-    emoji: isDark ? '🌑' : '🎨',
+    emoji: isDark ? '\u{1F311}' : '\u{1F3A8}',
     isDark,
     surface: isDark ? DARK_SURFACE : LIGHT_SURFACE,
     primary: safePrimary,

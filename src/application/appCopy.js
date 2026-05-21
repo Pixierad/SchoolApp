@@ -30,13 +30,13 @@ export function emptySubtitleFor(filter, total) {
   if (total === 0) return 'Tap the + button to add your first task or event.';
   switch (filter) {
     case 'today':
-      return 'Enjoy your day — or get ahead on something upcoming.';
+      return 'Enjoy your day \u2014 or get ahead on something upcoming.';
     case 'incomplete':
       return 'Everything is finished for now.';
     case 'upcoming':
       return 'No future due dates scheduled.';
     case 'overdue':
-      return "You're on top of things. 🎉";
+      return "You're on top of things. \u{1F389}";
     case 'complete':
       return 'Completed tasks will show up here.';
     default:
@@ -45,19 +45,18 @@ export function emptySubtitleFor(filter, total) {
 }
 
 export function emptyIconFor(filter, total) {
-  if (filter === 'incomplete') return '✅';
-  if (total === 0) return '📚';
+  if (filter === 'incomplete') return '\u2705';
+  if (total === 0) return '\u{1F4DA}';
   switch (filter) {
     case 'today':
-      return '☀️';
+      return '\u2600\uFE0F';
     case 'upcoming':
-      return '📅';
+      return '\u{1F4C5}';
     case 'overdue':
-      return '🎯';
+      return '\u{1F3AF}';
     case 'complete':
-      return '✅';
+      return '\u2705';
     default:
-      return '🎉';
+      return '\u{1F389}';
   }
 }
-

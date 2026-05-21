@@ -88,7 +88,7 @@ export const CHANGELOG = [
     date: '2026-04-25',
     title: 'Reliability pass and What\'s new',
     notes: [
-      'New: "What\'s new" panel — see recent improvements from the Settings sheet.',
+      'New: "What\'s new" panel \u2014 see recent improvements from the Settings sheet.',
       'Fixed: avoid re-uploading every task on cold boot (saves Supabase quota).',
       'Fixed: signing out no longer overwrites legacy local-only data.',
       'Fixed: legacy local data is now migrated to your account on first sign-in.',

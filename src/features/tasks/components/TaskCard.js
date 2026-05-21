@@ -26,7 +26,7 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
       ]}
     >
       <View style={[styles.checkbox, task.done && styles.checkboxDone]}>
-        {task.done && <Text style={styles.checkmark}>✓</Text>}
+        {task.done && <Text style={styles.checkmark}>{'\u2713'}</Text>}
       </View>
 
       <View style={styles.content}>
@@ -73,7 +73,7 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
           accessibilityLabel="Edit task"
           accessibilityRole="button"
         >
-          <Text style={styles.editBtnText}>✎</Text>
+          <Text style={styles.editBtnText}>{'\u270E'}</Text>
         </Pressable>
       ) : null}
 
@@ -88,7 +88,7 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
           accessibilityLabel="Delete task"
           accessibilityRole="button"
         >
-          <Text style={styles.deleteBtnText}>×</Text>
+          <Text style={styles.deleteBtnText}>{'\u00D7'}</Text>
         </Pressable>
       ) : null}
     </Pressable>

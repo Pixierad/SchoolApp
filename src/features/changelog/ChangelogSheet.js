@@ -152,7 +152,7 @@ export default function ChangelogSheet({ visible, entries = [], onClose }) {
                   <View style={styles.notes}>
                     {entry.notes.map((note, i) => (
                       <View key={i} style={styles.noteRow}>
-                        <Text style={styles.noteBullet}>•</Text>
+                        <Text style={styles.noteBullet}>{'\u2022'}</Text>
                         <Text style={styles.noteText}>{note}</Text>
                       </View>
                     ))}

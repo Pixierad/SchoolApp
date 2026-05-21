@@ -1,22 +1,22 @@
-export const DEFAULT_AVATAR_EMOJI = '🎓';
+export const DEFAULT_AVATAR_EMOJI = '\u{1F393}';
 
 export const AVATAR_EMOJIS = [
-  '🎓',
-  '📚',
-  '✏️',
-  '🧠',
-  '⭐',
-  '🚀',
-  '🎨',
-  '⚽',
-  '🎧',
-  '💻',
-  '🔬',
-  '🌿',
-  '☕',
-  '🌙',
-  '🔥',
-  '💡',
+  '\u{1F393}',
+  '\u{1F4DA}',
+  '\u270F\uFE0F',
+  '\u{1F9E0}',
+  '\u2B50',
+  '\u{1F680}',
+  '\u{1F3A8}',
+  '\u26BD',
+  '\u{1F3A7}',
+  '\u{1F4BB}',
+  '\u{1F52C}',
+  '\u{1F33F}',
+  '\u2615',
+  '\u{1F319}',
+  '\u{1F525}',
+  '\u{1F4A1}',
 ];
 
 export function normalizeUsername(value) {
