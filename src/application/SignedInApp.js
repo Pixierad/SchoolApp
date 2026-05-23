@@ -1289,7 +1289,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderRadius: radius.md,
     },
     desktopSidebarToggleHovered: {
-      backgroundColor: colors.cardMutedHover,
+      backgroundColor: colors.primarySoft,
     },
     desktopSidebarToggle: {
       height: 40,
@@ -1348,10 +1348,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       zIndex: 1,
     },
     desktopSidebarButtonPressed: {
-      backgroundColor: colors.cardMutedHover,
+      backgroundColor: colors.primarySoftHover,
     },
     desktopSidebarButtonHovered: {
-      backgroundColor: colors.cardHover,
+      backgroundColor: colors.primarySoft,
     },
     desktopSidebarIcon: {
       width: 24,
