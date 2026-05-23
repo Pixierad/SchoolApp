@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
   Alert,
   Animated,
   Dimensions,
@@ -46,6 +47,7 @@ export default function TaskForm({
   const [showPicker, setShowPicker] = useState(false);
 
   const screenHeight = Dimensions.get('window').height;
+  const screenHeightRef = useRef(screenHeight);
   // Lazy-init the Animated.Value so a fresh one isn't allocated and
   // immediately discarded on every re-render.
   const translateYRef = useRef(null);
@@ -58,6 +60,8 @@ export default function TaskForm({
     subjectPanelProgressRef.current = new Animated.Value(subjectPanelVisible ? 1 : 0);
   }
   const subjectPanelProgress = subjectPanelProgressRef.current;
+  const inputFocusedRef = useRef(false);
+  const inputBlurTimerRef = useRef(null);
 
   // Track mount status so deferred animation callbacks (200ms timing.start
   // continuations) don't fire onCancel against a parent that has already
@@ -67,12 +71,17 @@ export default function TaskForm({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
+    screenHeightRef.current = screenHeight;
+  }, [screenHeight]);
+
+  useEffect(() => {
     if (visible) {
-      translateY.setValue(screenHeight);
+      translateY.setValue(screenHeightRef.current);
       Animated.spring(translateY, {
         toValue: 0,
         useNativeDriver: true,
@@ -80,7 +89,7 @@ export default function TaskForm({
         speed: 20,
       }).start();
     }
-  }, [visible, translateY, screenHeight]);
+  }, [visible, translateY]);
 
   useEffect(() => {
     Animated.timing(subjectPanelProgress, {
@@ -92,12 +101,32 @@ export default function TaskForm({
 
   const closeWithAnimation = () => {
     Animated.timing(translateY, {
-      toValue: screenHeight,
+      toValue: screenHeightRef.current,
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
       if (mountedRef.current) onCancel?.();
     });
+  };
+
+  const markInputFocused = () => {
+    if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
+    inputFocusedRef.current = true;
+  };
+
+  const markInputBlurred = () => {
+    if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
+    inputBlurTimerRef.current = setTimeout(() => {
+      inputFocusedRef.current = false;
+    }, 80);
+  };
+
+  const closeOrDismissKeyboard = () => {
+    if (inputFocusedRef.current) {
+      Keyboard.dismiss();
+      return;
+    }
+    closeWithAnimation();
   };
   const isHeaderDrag = (event, gs) => {
     const y = event.nativeEvent.locationY ?? 0;
@@ -210,6 +239,8 @@ export default function TaskForm({
                 style={styles.input}
                 autoFocus={!isEditing}
                 returnKeyType="done"
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
               />
             </View>
 
@@ -225,6 +256,8 @@ export default function TaskForm({
                 numberOfLines={4}
                 textAlignVertical="top"
                 returnKeyType="default"
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
               />
             </View>
 
@@ -426,7 +459,7 @@ export default function TaskForm({
     return (
       <Modal visible={visible} animationType="fade" transparent onRequestClose={closeWithAnimation}>
         <View style={styles.desktopBackdrop}>
-          <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+          <Pressable style={styles.backdropFill} onPress={closeOrDismissKeyboard} />
           <View style={styles.desktopDialogRow}>
             <View style={[styles.sheet, styles.desktopTaskDialog, shadow.float]}>
               {formContent}
@@ -460,7 +493,7 @@ export default function TaskForm({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
-        <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+        <Pressable style={styles.backdropFill} onPress={closeOrDismissKeyboard} />
         <Animated.View
           style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
         >

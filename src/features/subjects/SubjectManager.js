@@ -40,6 +40,7 @@ export default function SubjectManager({
   }, [visible]);
 
   const screenHeight = Dimensions.get('window').height;
+  const screenHeightRef = useRef(screenHeight);
   // Lazy-init Animated.Value (otherwise a fresh one is created and discarded
   // on every re-render).
   const translateYRef = useRef(null);
@@ -57,8 +58,12 @@ export default function SubjectManager({
   }, []);
 
   useEffect(() => {
+    screenHeightRef.current = screenHeight;
+  }, [screenHeight]);
+
+  useEffect(() => {
     if (visible) {
-      translateY.setValue(screenHeight);
+      translateY.setValue(screenHeightRef.current);
       Animated.spring(translateY, {
         toValue: 0,
         useNativeDriver: true,
@@ -66,17 +71,17 @@ export default function SubjectManager({
         speed: 20,
       }).start();
     }
-  }, [visible, translateY, screenHeight]);
+  }, [visible, translateY]);
 
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
-      toValue: screenHeight,
+      toValue: screenHeightRef.current,
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
       if (mountedRef.current) onClose?.();
     });
-  }, [onClose, screenHeight, translateY]);
+  }, [onClose, translateY]);
   const isHeaderDrag = (event, gs) => {
     const y = event.nativeEvent.locationY ?? 0;
     return y <= 112 && gs.dy > 2 && Math.abs(gs.dy) > Math.abs(gs.dx);
@@ -369,7 +374,10 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
   const nameInputRef = useRef(null);
   const roomInputRef = useRef(null);
   const teacherInputRef = useRef(null);
+  const inputFocusedRef = useRef(false);
+  const inputBlurTimerRef = useRef(null);
   const screenHeight = Dimensions.get('window').height;
+  const screenHeightRef = useRef(screenHeight);
   const translateYRef = useRef(null);
   if (translateYRef.current == null) translateYRef.current = new Animated.Value(screenHeight);
   const translateY = translateYRef.current;
@@ -379,8 +387,13 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    screenHeightRef.current = screenHeight;
+  }, [screenHeight]);
 
   useEffect(() => {
     if (visible) {
@@ -388,7 +401,12 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
       setRoom(initial?.room ?? '');
       setTeacher(initial?.teacher ?? '');
       setColor(initial?.color ?? null);
-      translateY.setValue(screenHeight);
+    }
+  }, [visible, initial]);
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(screenHeightRef.current);
       Animated.spring(translateY, {
         toValue: 0,
         useNativeDriver: true,
@@ -396,17 +414,17 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
         speed: 20,
       }).start();
     }
-  }, [visible, initial, screenHeight, translateY]);
+  }, [visible, translateY]);
 
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
-      toValue: screenHeight,
+      toValue: screenHeightRef.current,
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
       if (mountedRef.current) onCancel?.();
     });
-  }, [onCancel, screenHeight, translateY]);
+  }, [onCancel, translateY]);
   const isHeaderDrag = (event, gs) => {
     const y = event.nativeEvent.locationY ?? 0;
     return y <= 112 && gs.dy > 2 && Math.abs(gs.dy) > Math.abs(gs.dx);
@@ -462,11 +480,32 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
     Keyboard.dismiss();
   }, []);
 
+  const markInputFocused = useCallback(() => {
+    if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
+    inputFocusedRef.current = true;
+  }, []);
+
+  const markInputBlurred = useCallback(() => {
+    if (inputBlurTimerRef.current) clearTimeout(inputBlurTimerRef.current);
+    inputBlurTimerRef.current = setTimeout(() => {
+      inputFocusedRef.current = false;
+    }, 80);
+  }, []);
+
+  const closeOrDismissKeyboard = useCallback(() => {
+    if (inputFocusedRef.current) {
+      Keyboard.dismiss();
+      return;
+    }
+    if (embedded) onCancel?.();
+    else closeWithAnimation();
+  }, [closeWithAnimation, embedded, onCancel]);
+
   if (embedded) {
     if (!visible) return null;
     return (
       <View style={styles.editorInlineOverlay}>
-        <Pressable style={styles.backdropFill} onPress={onCancel} />
+        <Pressable style={styles.backdropFill} onPress={closeOrDismissKeyboard} />
         <View style={[styles.editorSheet, styles.editorInlinePanel, shadow.float]}>
           <View style={styles.header}>
             <Text style={styles.title}>{isNew ? 'New subject' : 'Edit subject'}</Text>
@@ -492,6 +531,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={moveToRoom}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={40}
               />
             </View>
@@ -508,6 +549,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={moveToTeacher}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={20}
               />
             </View>
@@ -523,6 +566,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 style={styles.input}
                 returnKeyType="done"
                 onSubmitEditing={finishKeyboardEditing}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={40}
               />
             </View>
@@ -580,7 +625,7 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.editorBackdrop}
       >
-        <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+        <Pressable style={styles.backdropFill} onPress={closeOrDismissKeyboard} />
         <Animated.View
           style={[styles.editorSheet, shadow.float, { transform: [{ translateY }] }]}
         >
@@ -611,6 +656,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={moveToRoom}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={40}
               />
             </View>
@@ -627,6 +674,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={moveToTeacher}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={20}
               />
             </View>
@@ -642,6 +691,8 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                 style={styles.input}
                 returnKeyType="done"
                 onSubmitEditing={finishKeyboardEditing}
+                onFocus={markInputFocused}
+                onBlur={markInputBlurred}
                 maxLength={40}
               />
             </View>
