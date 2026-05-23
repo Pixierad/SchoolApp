@@ -1,7 +1,7 @@
 export const SORT_OPTIONS = [
-  { key: 'not_done_first', label: 'Not done first' },
   { key: 'due_date', label: 'Date due' },
   { key: 'alphabetical', label: 'A-Z' },
+  { key: 'not_done_first', label: 'Not done first' },
 ];
 export const STATUS_ONLY_FILTERS = new Set(['incomplete', 'complete']);
 
@@ -46,4 +46,3 @@ function compareNewestFirst(a, b) {
 function compareIds(a, b) {
   return String(a.id || '').localeCompare(String(b.id || ''));
 }
-
