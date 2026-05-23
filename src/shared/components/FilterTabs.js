@@ -32,7 +32,12 @@ export default function FilterTabs({ value, onChange, counts = {} }) {
           <Pressable
             key={f.key}
             onPress={() => onChange(f.key)}
-            style={[styles.tab, active && styles.tabActive]}
+            style={({ pressed, hovered }) => [
+              styles.tab,
+              active && styles.tabActive,
+              hovered && (active ? styles.tabActiveHovered : styles.tabHovered),
+              pressed && styles.tabPressed,
+            ]}
           >
             <Text style={[styles.tabText, active && styles.tabTextActive]}>
               {f.label}
@@ -81,6 +86,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     tabActive: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
+    },
+    tabHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    tabActiveHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    tabPressed: {
+      opacity: 0.78,
     },
     tabText: {
       ...typography.body,

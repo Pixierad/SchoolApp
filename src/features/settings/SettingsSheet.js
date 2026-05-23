@@ -139,11 +139,19 @@ export default function SettingsSheet({
         <View style={styles.settingsWindow}>
           <View style={styles.settingsWindowHeader}>
             <View style={styles.settingsHeader}>
-              <Pressable onPress={handleCancel} hitSlop={8} style={styles.settingsHeaderSide}>
+              <Pressable
+                onPress={handleCancel}
+                hitSlop={8}
+                style={({ hovered }) => [styles.settingsHeaderSide, hovered && styles.headerTextButtonHovered]}
+              >
                 <Text style={styles.doneText}>Cancel</Text>
               </Pressable>
               <Text style={styles.settingsTitle} numberOfLines={1}>Settings</Text>
-              <Pressable onPress={handleConfirm} hitSlop={8} style={styles.settingsHeaderSide}>
+              <Pressable
+                onPress={handleConfirm}
+                hitSlop={8}
+                style={({ hovered }) => [styles.settingsHeaderSide, hovered && styles.headerTextButtonHovered]}
+              >
                 <Text style={[styles.doneText, styles.confirmText]}>Confirm</Text>
               </Pressable>
             </View>
@@ -155,7 +163,11 @@ export default function SettingsSheet({
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionLabel}>Theme</Text>
-                <Pressable onPress={() => setBuilderOpen(true)} hitSlop={8}>
+                <Pressable
+                  onPress={() => setBuilderOpen(true)}
+                  hitSlop={8}
+                  style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+                >
                   <Text style={styles.addLink}>+ New theme</Text>
                 </Pressable>
               </View>
@@ -329,7 +341,12 @@ function ThemeTile({ preview, selected, onPress, onLongPress, styles }) {
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={500}
-      style={[styles.themeTile, { borderColor: border, backgroundColor: preview.bg }]}
+      style={({ pressed, hovered }) => [
+        styles.themeTile,
+        { borderColor: border, backgroundColor: preview.bg },
+        hovered && styles.themeTileHovered,
+        pressed && styles.themeTilePressed,
+      ]}
       accessibilityLabel={preview.label}
       accessibilityRole="button"
     >
@@ -464,7 +481,11 @@ function CustomThemeBuilder({ visible, onClose, onCreate }) {
             <View style={styles.handle} />
             <View style={styles.header}>
               <Text style={styles.title}>New theme</Text>
-              <Pressable onPress={closeBuilderWithAnimation} hitSlop={8}>
+              <Pressable
+                onPress={closeBuilderWithAnimation}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+              >
                 <Text style={styles.doneText}>Cancel</Text>
               </Pressable>
             </View>
@@ -630,7 +651,12 @@ function SegmentButton({ label, active, onPress, styles }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+      style={({ pressed, hovered }) => [
+        styles.segmentBtn,
+        active && styles.segmentBtnActive,
+        hovered && (active ? styles.segmentBtnActiveHovered : styles.segmentBtnHovered),
+        pressed && styles.segmentBtnPressed,
+      ]}
     >
       <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
         {label}
@@ -648,7 +674,11 @@ function LegalModal({ page, styles, onClose }) {
         <View style={styles.legalPanel}>
           <View style={styles.legalHeader}>
             <Text style={styles.legalTitle}>{content?.title}</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+            >
               <Text style={styles.legalClose}>Close</Text>
             </Pressable>
           </View>
@@ -749,6 +779,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontWeight: '600',
       color: colors.primary,
     },
+    headerTextButtonHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     confirmText: {
       textAlign: 'right',
     },
@@ -808,6 +846,15 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     segmentBtnActive: {
       backgroundColor: colors.card,
     },
+    segmentBtnHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    segmentBtnActiveHovered: {
+      backgroundColor: colors.cardHover,
+    },
+    segmentBtnPressed: {
+      opacity: 0.78,
+    },
     segmentText: {
       fontSize: 15,
       fontWeight: '600',
@@ -830,6 +877,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderWidth: 2,
       padding: spacing.md,
       gap: spacing.sm,
+    },
+    themeTileHovered: {
+      borderColor: colors.borderStrong,
+    },
+    themeTilePressed: {
+      opacity: 0.78,
     },
     themeTileTop: {
       flexDirection: 'row',

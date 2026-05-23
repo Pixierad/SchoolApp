@@ -790,7 +790,11 @@ export default function SignedInApp({ session, setSession }) {
               <DesktopVersionBadge styles={styles} />
               <Pressable
                 onPress={openNewTask}
-                style={styles.desktopAddBtn}
+                style={({ pressed, hovered }) => [
+                  styles.desktopAddBtn,
+                  hovered && styles.desktopAddBtnHovered,
+                  pressed && styles.desktopAddBtnPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Add task"
               >
@@ -798,7 +802,11 @@ export default function SignedInApp({ session, setSession }) {
               </Pressable>
               <Pressable
                 onPress={() => setNotificationsVisible(true)}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel="Open notifications"
               >
@@ -813,7 +821,11 @@ export default function SignedInApp({ session, setSession }) {
               </Pressable>
               <Pressable
                 onPress={openSettings}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel="Open settings"
               >
@@ -821,7 +833,11 @@ export default function SignedInApp({ session, setSession }) {
               </Pressable>
               <Pressable
                 onPress={openChangelog}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
               >
@@ -922,7 +938,11 @@ export default function SignedInApp({ session, setSession }) {
             <View style={styles.headerActions}>
               <Pressable
                 onPress={() => setNotificationsVisible(true)}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel="Open notifications"
               >
@@ -937,7 +957,11 @@ export default function SignedInApp({ session, setSession }) {
               </Pressable>
               <Pressable
                 onPress={openSettings}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel="Open settings"
               >
@@ -945,7 +969,11 @@ export default function SignedInApp({ session, setSession }) {
               </Pressable>
               <Pressable
                 onPress={openChangelog}
-                style={styles.iconBtn}
+                style={({ pressed, hovered }) => [
+                  styles.iconBtn,
+                  hovered && styles.iconBtnHovered,
+                  pressed && styles.iconBtnPressed,
+                ]}
                 hitSlop={8}
                 accessibilityLabel={hasUnreadChangelog ? "What's new (unread)" : "What's new"}
               >
@@ -1257,6 +1285,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.sm,
       alignItems: 'flex-start',
     },
+    desktopSidebarTogglePressable: {
+      borderRadius: radius.md,
+    },
+    desktopSidebarToggleHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
     desktopSidebarToggle: {
       height: 40,
       borderRadius: radius.md,
@@ -1314,10 +1348,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       zIndex: 1,
     },
     desktopSidebarButtonPressed: {
-      backgroundColor: colors.cardMuted,
+      backgroundColor: colors.cardMutedHover,
     },
     desktopSidebarButtonHovered: {
-      backgroundColor: colors.cardMuted,
+      backgroundColor: colors.cardHover,
     },
     desktopSidebarIcon: {
       width: 24,
@@ -1496,6 +1530,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    desktopAddBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    desktopAddBtnPressed: {
+      opacity: 0.78,
+    },
     desktopAddText: {
       color: '#fff',
       fontSize: 14,
@@ -1536,6 +1576,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderWidth: 1,
       borderColor: colors.border,
       position: 'relative',
+    },
+    iconBtnHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    iconBtnPressed: {
+      backgroundColor: colors.cardMutedHover,
     },
     iconBtnText: {
       fontSize: 20,
@@ -1641,6 +1688,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 14,
       fontWeight: '800',
     },
+    notificationsLinkHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     notificationsEmpty: {
       ...typography.bodyMuted,
       padding: spacing.lg,
@@ -1655,6 +1710,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       gap: spacing.md,
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
+    },
+    notificationRowHovered: {
+      backgroundColor: colors.cardHover,
+    },
+    notificationRowPressed: {
+      backgroundColor: colors.cardMutedHover,
     },
     notificationTypeDot: {
       width: 10,
@@ -1742,6 +1803,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 13,
       fontWeight: '800',
     },
+    syncBannerDismissHovered: {
+      backgroundColor: colors.dangerSoftHover,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     sortControls: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1776,6 +1845,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     sortOptionActive: {
       backgroundColor: colors.primarySoft,
       borderColor: colors.primary,
+    },
+    sortOptionHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    sortOptionActiveHovered: {
+      backgroundColor: colors.primarySoftHover,
+    },
+    sortOptionPressed: {
+      backgroundColor: colors.cardMutedHover,
     },
     sortOptionText: {
       color: colors.textMuted,
@@ -1825,6 +1904,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       justifyContent: 'center',
       gap: 3,
     },
+    bottomBarBtnHovered: {
+      backgroundColor: colors.cardHover,
+    },
+    bottomBarBtnPressed: {
+      backgroundColor: colors.cardMutedHover,
+    },
     bottomBarIcon: {
       fontSize: 22,
       lineHeight: 26,
@@ -1841,6 +1926,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    bottomAddBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    bottomAddBtnPressed: {
+      opacity: 0.78,
     },
     bottomAddIcon: {
       color: '#fff',

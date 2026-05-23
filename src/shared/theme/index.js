@@ -368,6 +368,22 @@ export function buildTheme(themeKey = 'light', customThemes = []) {
     primarySoft: def.primarySoft ?? softFromPrimary(def.primary, isDark),
     primaryText: '#FFFFFF',
   };
+  colors.cardHover = isDark ? mix(colors.card, '#FFFFFF', 0.08) : mix(colors.card, '#000000', 0.035);
+  colors.cardMutedHover = isDark
+    ? mix(colors.cardMuted, '#FFFFFF', 0.08)
+    : mix(colors.cardMuted, '#000000', 0.04);
+  colors.primaryHover = isDark
+    ? mix(colors.primary, '#FFFFFF', 0.14)
+    : mix(colors.primary, '#000000', 0.1);
+  colors.primarySoftHover = isDark
+    ? mix(colors.primarySoft, '#FFFFFF', 0.1)
+    : mix(colors.primarySoft, colors.primary, 0.08);
+  colors.dangerSoftHover = isDark
+    ? mix(colors.dangerSoft, '#FFFFFF', 0.1)
+    : mix(colors.dangerSoft, colors.danger, 0.08);
+  colors.successSoftHover = isDark
+    ? mix(colors.successSoft, '#FFFFFF', 0.1)
+    : mix(colors.successSoft, colors.success, 0.08);
 
   const typography = {
     title:      { fontSize: 28, fontWeight: '700', color: colors.text, letterSpacing: -0.5 },

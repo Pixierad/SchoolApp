@@ -62,7 +62,11 @@ export function BottomActionBar({
         onPress={onAddTask}
         accessibilityLabel="Add task"
         accessibilityRole="button"
-        style={styles.bottomAddBtn}
+        style={({ pressed, hovered }) => [
+          styles.bottomAddBtn,
+          hovered && styles.bottomAddBtnHovered,
+          pressed && styles.bottomAddBtnPressed,
+        ]}
       >
         <Text style={styles.bottomAddIcon}>+</Text>
       </Pressable>
@@ -149,6 +153,11 @@ export function DesktopSidebar({
           onPress={onToggle}
           accessibilityRole="button"
           accessibilityLabel={collapsed ? 'Open sidebar' : 'Collapse sidebar'}
+          style={({ pressed, hovered }) => [
+            styles.desktopSidebarTogglePressable,
+            hovered && styles.desktopSidebarToggleHovered,
+            pressed && styles.desktopSidebarButtonPressed,
+          ]}
         >
           <Animated.View style={[styles.desktopSidebarToggle, { width: toggleWidth }]}>
             <View style={styles.desktopSidebarToggleIcon}>
@@ -197,8 +206,9 @@ export function DesktopSidebar({
           onPress={onProfile}
           accessibilityRole="button"
           accessibilityLabel="Open profile"
-          style={({ pressed }) => [
+          style={({ pressed, hovered }) => [
             styles.desktopSidebarProfile,
+            hovered && styles.desktopSidebarButtonHovered,
             pressed && styles.desktopSidebarButtonPressed,
           ]}
         >
@@ -255,7 +265,11 @@ function BarButton({ label, icon, avatar, onPress, accessibilityLabel, styles })
       onPress={onPress}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      style={styles.bottomBarBtn}
+      style={({ pressed, hovered }) => [
+        styles.bottomBarBtn,
+        hovered && styles.bottomBarBtnHovered,
+        pressed && styles.bottomBarBtnPressed,
+      ]}
     >
       {avatar || <Text style={styles.bottomBarIcon}>{icon}</Text>}
       <Text style={styles.bottomBarLabel} numberOfLines={1}>{label}</Text>
@@ -279,7 +293,12 @@ export function SortControls({ value, onChange, filter, styles }) {
               onPress={() => onChange(option.key)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              style={[styles.sortOption, active && styles.sortOptionActive]}
+              style={({ pressed, hovered }) => [
+                styles.sortOption,
+                active && styles.sortOptionActive,
+                hovered && (active ? styles.sortOptionActiveHovered : styles.sortOptionHovered),
+                pressed && styles.sortOptionPressed,
+              ]}
             >
               <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
                 {option.label}
@@ -338,7 +357,12 @@ export function SyncErrorBanner({ message, onDismiss, styles }) {
   return (
     <View style={styles.syncBanner}>
       <Text style={styles.syncBannerText}>{message}</Text>
-      <Pressable onPress={onDismiss} hitSlop={8} accessibilityLabel="Dismiss sync warning">
+      <Pressable
+        onPress={onDismiss}
+        hitSlop={8}
+        accessibilityLabel="Dismiss sync warning"
+        style={({ hovered }) => hovered && styles.syncBannerDismissHovered}
+      >
         <Text style={styles.syncBannerDismiss}>Dismiss</Text>
       </Pressable>
     </View>
@@ -430,11 +454,19 @@ export function NotificationsPanel({
             <Text style={styles.notificationsTitle}>Notifications</Text>
             <View style={styles.notificationsHeaderActions}>
               {notifications.length > 0 ? (
-                <Pressable onPress={onClear} hitSlop={8}>
+                <Pressable
+                  onPress={onClear}
+                  hitSlop={8}
+                  style={({ hovered }) => hovered && styles.notificationsLinkHovered}
+                >
                   <Text style={styles.notificationsLink}>Clear</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={onClose} hitSlop={8}>
+              <Pressable
+                onPress={onClose}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.notificationsLinkHovered}
+              >
                 <Text style={styles.notificationsLink}>Done</Text>
               </Pressable>
             </View>
@@ -451,7 +483,11 @@ export function NotificationsPanel({
               renderItem={({ item }) => (
                 <Pressable
                   onPress={() => onPressNotification?.(item)}
-                  style={styles.notificationRow}
+                  style={({ pressed, hovered }) => [
+                    styles.notificationRow,
+                    hovered && styles.notificationRowHovered,
+                    pressed && styles.notificationRowPressed,
+                  ]}
                 >
                   <View style={styles.notificationTypeDot} />
                   <View style={styles.notificationRowText}>

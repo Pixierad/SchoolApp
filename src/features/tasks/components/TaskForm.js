@@ -264,7 +264,11 @@ export default function TaskForm({
             <View style={styles.field}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Subject</Text>
-                <Pressable onPress={onManageSubjects} hitSlop={8}>
+                <Pressable
+                  onPress={onManageSubjects}
+                  hitSlop={8}
+                  style={({ hovered }) => hovered && styles.manageLinkHovered}
+                >
                   <Text style={styles.manageLink}>Manage</Text>
                 </Pressable>
               </View>
@@ -299,7 +303,14 @@ export default function TaskForm({
                   />
                 ))}
                 {subjects.length === 0 ? (
-                  <Pressable onPress={onManageSubjects} style={styles.addSubjectChip}>
+                  <Pressable
+                    onPress={onManageSubjects}
+                    style={({ pressed, hovered }) => [
+                      styles.addSubjectChip,
+                      hovered && styles.addSubjectChipHovered,
+                      pressed && styles.addSubjectChipPressed,
+                    ]}
+                  >
                     <Text style={styles.addSubjectText}>+ Add a subject</Text>
                   </Pressable>
                 ) : null}
@@ -346,7 +357,14 @@ export default function TaskForm({
                         }}
                       />
                       {dueDate ? (
-                        <Pressable onPress={() => setDueDate(null)} style={styles.clearDateBtnDesktop}>
+                        <Pressable
+                          onPress={() => setDueDate(null)}
+                          style={({ pressed, hovered }) => [
+                            styles.clearDateBtnDesktop,
+                            hovered && styles.clearDateBtnHovered,
+                            pressed && styles.clearDateBtnPressed,
+                          ]}
+                        >
                           <Text style={styles.clearText}>Clear</Text>
                         </Pressable>
                       ) : null}
@@ -364,7 +382,7 @@ export default function TaskForm({
                       <Pressable
                         onPress={() => setDueDate(null)}
                         hitSlop={8}
-                        style={styles.clearBtnWeb}
+                        style={({ hovered }) => [styles.clearBtnWeb, hovered && styles.clearInlineBtnHovered]}
                       >
                         <Text style={styles.clearText}>Clear</Text>
                       </Pressable>
@@ -428,17 +446,35 @@ export default function TaskForm({
 
           <View style={styles.footer}>
             {isEditing ? (
-              <Pressable onPress={handleDelete} style={styles.deleteBtn} hitSlop={8}>
+              <Pressable
+                onPress={handleDelete}
+                style={({ hovered }) => [styles.deleteBtn, hovered && styles.deleteBtnHovered]}
+                hitSlop={8}
+              >
                 <Text style={styles.deleteText}>Delete</Text>
               </Pressable>
             ) : (
               <View style={{ flex: 1 }} />
             )}
             <View style={styles.footerRight}>
-              <Pressable onPress={closeWithAnimation} style={styles.cancelBtn}>
+              <Pressable
+                onPress={closeWithAnimation}
+                style={({ pressed, hovered }) => [
+                  styles.cancelBtn,
+                  hovered && styles.cancelBtnHovered,
+                  pressed && styles.cancelBtnPressed,
+                ]}
+              >
                 <Text style={styles.cancelText}>Cancel</Text>
               </Pressable>
-              <Pressable onPress={handleSave} style={styles.saveBtn}>
+              <Pressable
+                onPress={handleSave}
+                style={({ pressed, hovered }) => [
+                  styles.saveBtn,
+                  hovered && styles.saveBtnHovered,
+                  pressed && styles.saveBtnPressed,
+                ]}
+              >
                 <Text style={styles.saveText}>{isEditing ? 'Save' : 'Add task'}</Text>
               </Pressable>
             </View>
@@ -511,11 +547,13 @@ function SubjectChip({ label, name, active, onPress, subjects, styles, colors, c
   return (
     <Pressable
       onPress={onPress}
-      style={[
+      style={({ pressed, hovered }) => [
         styles.chip,
         active
           ? { backgroundColor: color.bg, borderColor: color.fg }
           : { backgroundColor: colors.card, borderColor: colors.border },
+        hovered && (active ? { borderColor: color.fg } : styles.chipHovered),
+        pressed && styles.chipPressed,
       ]}
     >
       <Text
@@ -670,6 +708,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontWeight: '600',
       color: colors.primary,
     },
+    manageLinkHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     input: {
       backgroundColor: colors.card,
       borderRadius: radius.md,
@@ -696,6 +742,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderWidth: 1,
       maxWidth: 160,
     },
+    chipHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    chipPressed: {
+      opacity: 0.75,
+    },
     chipText: {
       fontSize: 13,
       fontWeight: '600',
@@ -707,6 +760,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderWidth: 1,
       borderColor: colors.primary,
       borderStyle: 'dashed',
+    },
+    addSubjectChipHovered: {
+      backgroundColor: colors.primarySoft,
+    },
+    addSubjectChipPressed: {
+      opacity: 0.75,
     },
     addSubjectText: {
       fontSize: 13,
@@ -781,11 +840,21 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    clearDateBtnHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    clearDateBtnPressed: {
+      opacity: 0.75,
+    },
     clearBtnWeb: {
       position: 'relative',
       zIndex: 2,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
+      borderRadius: radius.sm,
+    },
+    clearInlineBtnHovered: {
+      backgroundColor: colors.primarySoft,
     },
     dateText: {
       fontSize: 16,
@@ -820,6 +889,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     deleteBtn: {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
+      borderRadius: radius.sm,
+    },
+    deleteBtnHovered: {
+      backgroundColor: colors.dangerSoftHover,
     },
     deleteText: {
       color: colors.danger,
@@ -832,6 +905,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderRadius: radius.md,
       backgroundColor: colors.cardMuted,
     },
+    cancelBtnHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    cancelBtnPressed: {
+      opacity: 0.78,
+    },
     cancelText: {
       color: colors.textMuted,
       fontWeight: '600',
@@ -841,6 +920,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.md,
       borderRadius: radius.md,
       backgroundColor: colors.primary,
+    },
+    saveBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    saveBtnPressed: {
+      opacity: 0.78,
     },
     saveText: {
       color: '#fff',

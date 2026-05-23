@@ -467,7 +467,14 @@ function ListView({ styles, rooms, userId, loading, message, onCreate, onOpen, o
   return (
     <View style={styles.listWrap}>
       <View style={styles.createEntryWrap}>
-        <Pressable onPress={onCreate} style={styles.createRow}>
+        <Pressable
+          onPress={onCreate}
+          style={({ pressed, hovered }) => [
+            styles.createRow,
+            hovered && styles.createRowHovered,
+            pressed && styles.createRowPressed,
+          ]}
+        >
           <View style={styles.createIcon}>
             <Text style={styles.createIconText}>+</Text>
           </View>
@@ -537,7 +544,12 @@ function CreateView({
               <Pressable
                 key={option.hours}
                 onPress={() => setLifetimeHours(option.hours)}
-                style={[styles.durationBtn, active && styles.durationBtnActive]}
+                style={({ pressed, hovered }) => [
+                  styles.durationBtn,
+                  active && styles.durationBtnActive,
+                  hovered && (active ? styles.durationBtnActiveHovered : styles.durationBtnHovered),
+                  pressed && styles.durationBtnPressed,
+                ]}
               >
                 <Text style={[styles.durationText, active && styles.durationTextActive]}>
                   {option.label}
@@ -559,7 +571,12 @@ function CreateView({
             <Pressable
               key={friend.id}
               onPress={() => toggleFriend(friend.id)}
-              style={[styles.friendPickRow, selected && styles.friendPickRowSelected]}
+              style={({ pressed, hovered }) => [
+                styles.friendPickRow,
+                selected && styles.friendPickRowSelected,
+                hovered && (selected ? styles.friendPickRowSelectedHovered : styles.friendPickRowHovered),
+                pressed && styles.friendPickRowPressed,
+              ]}
             >
               <ProfileAvatar profile={friend} size={38} />
               <View style={styles.friendText}>
@@ -581,7 +598,12 @@ function CreateView({
       <Pressable
         onPress={onCreate}
         disabled={!canCreate}
-        style={[styles.primaryBtn, !canCreate && styles.disabled]}
+        style={({ pressed, hovered }) => [
+          styles.primaryBtn,
+          hovered && canCreate && styles.primaryBtnHovered,
+          pressed && canCreate && styles.primaryBtnPressed,
+          !canCreate && styles.disabled,
+        ]}
       >
         {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Create chat</Text>}
       </Pressable>
@@ -743,7 +765,11 @@ function RoomView({
               <Pressable
                 key={person.id}
                 onPress={() => insertMention(person)}
-                style={styles.mentionOption}
+                style={({ pressed, hovered }) => [
+                  styles.mentionOption,
+                  hovered && styles.mentionOptionHovered,
+                  pressed && styles.mentionOptionPressed,
+                ]}
               >
                 <ProfileAvatar profile={person} size={28} />
                 <View style={styles.mentionText}>
@@ -791,7 +817,12 @@ function RoomView({
         <Pressable
           onPress={onSend}
           disabled={!draft.trim() || busy}
-          style={[styles.sendBtn, (!draft.trim() || busy) && styles.disabled]}
+          style={({ pressed, hovered }) => [
+            styles.sendBtn,
+            hovered && draft.trim() && !busy && styles.sendBtnHovered,
+            pressed && draft.trim() && !busy && styles.sendBtnPressed,
+            (!draft.trim() || busy) && styles.disabled,
+          ]}
         >
           <Text style={styles.sendText}>Send</Text>
         </Pressable>
@@ -808,7 +839,11 @@ function ChatRow({ room, userId, styles, onPress, onLongPress }) {
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={450}
-      style={styles.chatRow}
+      style={({ pressed, hovered }) => [
+        styles.chatRow,
+        hovered && styles.chatRowHovered,
+        pressed && styles.chatRowPressed,
+      ]}
     >
       <View style={styles.avatarStack}>
         {(room.members || []).slice(0, 2).map((member, index) => (
@@ -1380,6 +1415,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       padding: spacing.md,
       gap: spacing.md,
     },
+    createRowHovered: {
+      backgroundColor: colors.primarySoftHover,
+    },
+    createRowPressed: {
+      opacity: 0.78,
+    },
     createIcon: {
       width: 40,
       height: 40,
@@ -1418,6 +1459,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderColor: colors.border,
       padding: spacing.md,
       gap: spacing.md,
+    },
+    chatRowHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    chatRowPressed: {
+      backgroundColor: colors.cardMutedHover,
     },
     avatarStack: {
       width: 48,
@@ -1511,6 +1559,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
+    durationBtnHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    durationBtnActiveHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    durationBtnPressed: {
+      opacity: 0.78,
+    },
     durationText: {
       color: colors.text,
       fontSize: 14,
@@ -1532,6 +1590,16 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     friendPickRowSelected: {
       borderColor: colors.primary,
       backgroundColor: colors.primarySoft,
+    },
+    friendPickRowHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    friendPickRowSelectedHovered: {
+      backgroundColor: colors.primarySoftHover,
+    },
+    friendPickRowPressed: {
+      opacity: 0.78,
     },
     friendText: {
       flex: 1,
@@ -1573,6 +1641,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: spacing.lg,
+    },
+    primaryBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    primaryBtnPressed: {
+      opacity: 0.78,
     },
     primaryBtnText: {
       color: '#fff',
@@ -1704,6 +1778,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.sm,
       backgroundColor: colors.primarySoft,
     },
+    mentionOptionHovered: {
+      backgroundColor: colors.primarySoftHover,
+    },
+    mentionOptionPressed: {
+      opacity: 0.78,
+    },
     mentionText: {
       flex: 1,
       minWidth: 0,
@@ -1762,6 +1842,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.md,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    sendBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    sendBtnPressed: {
+      opacity: 0.78,
     },
     sendText: {
       color: '#fff',

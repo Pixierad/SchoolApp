@@ -184,7 +184,11 @@ export default function SubjectManager({
           <View style={styles.header}>
             <Text style={styles.title}>Subjects</Text>
             {onClose ? (
-              <Pressable onPress={onClose} hitSlop={8}>
+              <Pressable
+                onPress={onClose}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+              >
                 <Text style={styles.doneText}>Close</Text>
               </Pressable>
             ) : null}
@@ -194,7 +198,11 @@ export default function SubjectManager({
         <View style={styles.addRow}>
           <Pressable
             onPress={() => setEditing({ index: null, draft: blankSubject() })}
-            style={styles.addBtn}
+            style={({ pressed, hovered }) => [
+              styles.addBtn,
+              hovered && styles.addBtnHovered,
+              pressed && styles.addBtnPressed,
+            ]}
           >
             <Text style={styles.addBtnText}>+ Add subject</Text>
           </Pressable>
@@ -220,9 +228,10 @@ export default function SubjectManager({
               return (
                 <Pressable
                   onPress={() => setEditing({ index, draft: { ...item } })}
-                  style={({ pressed }) => [
+                  style={({ pressed, hovered }) => [
                     styles.row,
                     { backgroundColor: color.bg },
+                    hovered && { borderColor: color.fg },
                     pressed && { opacity: 0.7 },
                   ]}
                 >
@@ -237,7 +246,11 @@ export default function SubjectManager({
                       remove(index);
                     }}
                     hitSlop={8}
-                    style={styles.removeBtn}
+                    style={({ pressed, hovered }) => [
+                      styles.removeBtn,
+                      hovered && styles.removeBtnHovered,
+                      pressed && styles.removeBtnPressed,
+                    ]}
                   >
                     <Text style={styles.removeText}>{'\u00D7'}</Text>
                   </Pressable>
@@ -273,7 +286,11 @@ export default function SubjectManager({
             <View style={styles.handle} />
             <View style={styles.header}>
               <Text style={styles.title}>Subjects</Text>
-              <Pressable onPress={closeWithAnimation} hitSlop={8}>
+              <Pressable
+                onPress={closeWithAnimation}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+              >
                 <Text style={styles.doneText}>Done</Text>
               </Pressable>
             </View>
@@ -282,7 +299,11 @@ export default function SubjectManager({
           <View style={styles.addRow}>
             <Pressable
               onPress={() => setEditing({ index: null, draft: blankSubject() })}
-              style={styles.addBtn}
+              style={({ pressed, hovered }) => [
+                styles.addBtn,
+                hovered && styles.addBtnHovered,
+                pressed && styles.addBtnPressed,
+              ]}
             >
               <Text style={styles.addBtnText}>+ Add subject</Text>
             </Pressable>
@@ -308,9 +329,10 @@ export default function SubjectManager({
                 return (
                   <Pressable
                     onPress={() => setEditing({ index, draft: { ...item } })}
-                    style={({ pressed }) => [
+                    style={({ pressed, hovered }) => [
                       styles.row,
                       { backgroundColor: color.bg },
+                      hovered && { borderColor: color.fg },
                       pressed && { opacity: 0.7 },
                     ]}
                   >
@@ -325,7 +347,11 @@ export default function SubjectManager({
                         remove(index);
                       }}
                       hitSlop={8}
-                      style={styles.removeBtn}
+                      style={({ pressed, hovered }) => [
+                        styles.removeBtn,
+                        hovered && styles.removeBtnHovered,
+                        pressed && styles.removeBtnPressed,
+                      ]}
                     >
                       <Text style={styles.removeText}>{'\u00D7'}</Text>
                     </Pressable>
@@ -509,7 +535,11 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
         <View style={[styles.editorSheet, styles.editorInlinePanel, shadow.float]}>
           <View style={styles.header}>
             <Text style={styles.title}>{isNew ? 'New subject' : 'Edit subject'}</Text>
-            <Pressable onPress={onCancel} hitSlop={8}>
+            <Pressable
+              onPress={onCancel}
+              hitSlop={8}
+              style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+            >
               <Text style={styles.doneText}>Cancel</Text>
             </Pressable>
           </View>
@@ -577,8 +607,10 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
               <View style={styles.colorRow}>
                 <Pressable
                   onPress={() => setColor(null)}
-                  style={[
+                  style={({ pressed, hovered }) => [
                     styles.colorAuto,
+                    hovered && styles.colorAutoHovered,
+                    pressed && styles.colorPressed,
                     color == null && { borderColor: colors.text, borderWidth: 3 },
                   ]}
                 >
@@ -590,9 +622,11 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                     <Pressable
                       key={hex}
                       onPress={() => setColor(hex)}
-                      style={[
+                      style={({ pressed, hovered }) => [
                         styles.colorSwatch,
                         { backgroundColor: hex },
+                        hovered && styles.colorSwatchHovered,
+                        pressed && styles.colorPressed,
                         selected && { borderColor: colors.text, borderWidth: 3 },
                       ]}
                       accessibilityLabel={hex}
@@ -607,10 +641,24 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
           </ScrollView>
 
           <View style={styles.editorFooter}>
-            <Pressable onPress={onCancel} style={styles.cancelBtn}>
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed, hovered }) => [
+                styles.cancelBtn,
+                hovered && styles.cancelBtnHovered,
+                pressed && styles.cancelBtnPressed,
+              ]}
+            >
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={submit} style={styles.saveBtn}>
+            <Pressable
+              onPress={submit}
+              style={({ pressed, hovered }) => [
+                styles.saveBtn,
+                hovered && styles.saveBtnHovered,
+                pressed && styles.saveBtnPressed,
+              ]}
+            >
               <Text style={styles.saveText}>{isNew ? 'Add subject' : 'Save'}</Text>
             </Pressable>
           </View>
@@ -633,7 +681,11 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
             <View style={styles.handle} />
             <View style={styles.header}>
               <Text style={styles.title}>{isNew ? 'New subject' : 'Edit subject'}</Text>
-              <Pressable onPress={closeWithAnimation} hitSlop={8}>
+              <Pressable
+                onPress={closeWithAnimation}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+              >
                 <Text style={styles.doneText}>Cancel</Text>
               </Pressable>
             </View>
@@ -702,8 +754,10 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
               <View style={styles.colorRow}>
                 <Pressable
                   onPress={() => setColor(null)}
-                  style={[
+                  style={({ pressed, hovered }) => [
                     styles.colorAuto,
+                    hovered && styles.colorAutoHovered,
+                    pressed && styles.colorPressed,
                     color == null && { borderColor: colors.text, borderWidth: 3 },
                   ]}
                 >
@@ -715,9 +769,11 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
                     <Pressable
                       key={hex}
                       onPress={() => setColor(hex)}
-                      style={[
+                      style={({ pressed, hovered }) => [
                         styles.colorSwatch,
                         { backgroundColor: hex },
+                        hovered && styles.colorSwatchHovered,
+                        pressed && styles.colorPressed,
                         selected && { borderColor: colors.text, borderWidth: 3 },
                       ]}
                       accessibilityLabel={hex}
@@ -732,10 +788,24 @@ function SubjectEditor({ visible, embedded = false, isNew, initial, onCancel, on
           </ScrollView>
 
           <View style={styles.editorFooter}>
-            <Pressable onPress={closeWithAnimation} style={styles.cancelBtn}>
+            <Pressable
+              onPress={closeWithAnimation}
+              style={({ pressed, hovered }) => [
+                styles.cancelBtn,
+                hovered && styles.cancelBtnHovered,
+                pressed && styles.cancelBtnPressed,
+              ]}
+            >
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={submit} style={styles.saveBtn}>
+            <Pressable
+              onPress={submit}
+              style={({ pressed, hovered }) => [
+                styles.saveBtn,
+                hovered && styles.saveBtnHovered,
+                pressed && styles.saveBtnPressed,
+              ]}
+            >
               <Text style={styles.saveText}>{isNew ? 'Add subject' : 'Save'}</Text>
             </Pressable>
           </View>
@@ -802,6 +872,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontWeight: '600',
       color: colors.primary,
     },
+    headerTextButtonHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     addRow: {
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
@@ -812,6 +890,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    addBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    addBtnPressed: {
+      opacity: 0.78,
     },
     addBtnText: {
       color: '#fff',
@@ -841,6 +925,8 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       alignItems: 'center',
       padding: spacing.md,
       borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: 'transparent',
       gap: spacing.md,
     },
     dot: {
@@ -864,6 +950,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'rgba(255,255,255,0.5)',
+    },
+    removeBtnHovered: {
+      backgroundColor: colors.dangerSoftHover,
+    },
+    removeBtnPressed: {
+      opacity: 0.7,
     },
     removeText: {
       fontSize: 20,
@@ -939,6 +1031,10 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       justifyContent: 'center',
       minHeight: 36,
     },
+    colorAutoHovered: {
+      backgroundColor: colors.cardMutedHover,
+      borderColor: colors.borderStrong,
+    },
     colorAutoText: {
       fontSize: 13,
       fontWeight: '700',
@@ -950,6 +1046,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    colorSwatchHovered: {
+      borderColor: colors.textMuted,
+    },
+    colorPressed: {
+      opacity: 0.75,
     },
     editorFooter: {
       flexDirection: 'row',
@@ -966,6 +1068,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderRadius: radius.md,
       backgroundColor: colors.cardMuted,
     },
+    cancelBtnHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    cancelBtnPressed: {
+      opacity: 0.78,
+    },
     cancelText: {
       color: colors.textMuted,
       fontWeight: '600',
@@ -975,6 +1083,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingVertical: spacing.md,
       borderRadius: radius.md,
       backgroundColor: colors.primary,
+    },
+    saveBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    saveBtnPressed: {
+      opacity: 0.78,
     },
     saveText: {
       color: '#fff',

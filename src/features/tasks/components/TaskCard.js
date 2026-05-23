@@ -18,10 +18,11 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
   return (
     <Pressable
       onPress={onToggle}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }) => [
         styles.card,
         shadow.card,
         task.done && styles.cardDone,
+        hovered && (task.done ? styles.cardDoneHovered : styles.cardHovered),
         pressed && styles.cardPressed,
       ]}
     >
@@ -66,8 +67,9 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         <Pressable
           onPress={onPress}
           hitSlop={10}
-          style={({ pressed }) => [
+          style={({ pressed, hovered }) => [
             styles.editBtn,
+            hovered && styles.editBtnHovered,
             pressed && styles.editBtnPressed,
           ]}
           accessibilityLabel="Edit task"
@@ -81,8 +83,9 @@ export default function TaskCard({ task, subjects = [], onToggle, onPress, onDel
         <Pressable
           onPress={onDelete}
           hitSlop={10}
-          style={({ pressed }) => [
+          style={({ pressed, hovered }) => [
             styles.deleteBtn,
+            hovered && styles.deleteBtnHovered,
             pressed && styles.deleteBtnPressed,
           ]}
           accessibilityLabel="Delete task"
@@ -122,6 +125,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     cardDone: {
       backgroundColor: colors.cardMuted,
+    },
+    cardHovered: {
+      backgroundColor: colors.cardHover,
+    },
+    cardDoneHovered: {
+      backgroundColor: colors.cardMutedHover,
     },
     cardPressed: {
       opacity: 0.7,
@@ -205,6 +214,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     editBtnPressed: {
       opacity: 0.6,
     },
+    editBtnHovered: {
+      backgroundColor: colors.primarySoftHover,
+    },
     editBtnText: {
       color: colors.primary,
       fontSize: 18,
@@ -223,6 +235,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     },
     deleteBtnPressed: {
       opacity: 0.6,
+    },
+    deleteBtnHovered: {
+      backgroundColor: colors.dangerSoftHover,
     },
     deleteBtnText: {
       color: colors.danger,

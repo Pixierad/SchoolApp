@@ -437,7 +437,11 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
             <View style={styles.handle} />
             <View style={styles.header}>
               <Text style={styles.title}>Friends</Text>
-              <Pressable onPress={closeWithAnimation} hitSlop={8}>
+              <Pressable
+                onPress={closeWithAnimation}
+                hitSlop={8}
+                style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+              >
                 <Text style={styles.doneText}>Done</Text>
               </Pressable>
             </View>
@@ -624,14 +628,25 @@ function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
         <Pressable
           onPress={onDecline}
           disabled={busy}
-          style={[styles.friendAction, styles.friendActionSubtle, busy && styles.friendActionDisabled]}
+          style={({ pressed, hovered }) => [
+            styles.friendAction,
+            styles.friendActionSubtle,
+            hovered && !busy && styles.friendActionSubtleHovered,
+            pressed && !busy && styles.friendActionPressed,
+            busy && styles.friendActionDisabled,
+          ]}
         >
           <Text style={styles.friendActionSubtleText}>Decline</Text>
         </Pressable>
         <Pressable
           onPress={onAccept}
           disabled={busy}
-          style={[styles.friendAction, busy && styles.friendActionDisabled]}
+          style={({ pressed, hovered }) => [
+            styles.friendAction,
+            hovered && !busy && styles.friendActionHovered,
+            pressed && !busy && styles.friendActionPressed,
+            busy && styles.friendActionDisabled,
+          ]}
         >
           {busy ? (
             <ActivityIndicator size="small" />
@@ -658,9 +673,11 @@ function FriendRow({ person, busy, actionLabel, disabled, danger, onPress, style
       <Pressable
         onPress={onPress}
         disabled={disabled || busy}
-        style={[
+        style={({ pressed, hovered }) => [
           styles.friendAction,
           danger && styles.friendActionDanger,
+          hovered && !(disabled || busy) && (danger ? styles.friendActionDangerHovered : styles.friendActionHovered),
+          pressed && !(disabled || busy) && styles.friendActionPressed,
           (disabled || busy) && styles.friendActionDisabled,
         ]}
       >
@@ -739,6 +756,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontSize: 15,
       fontWeight: '600',
       color: colors.primary,
+    },
+    headerTextButtonHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
     },
     content: {
       paddingHorizontal: spacing.lg,
@@ -847,9 +872,21 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     friendActionDanger: {
       backgroundColor: colors.dangerSoft,
     },
+    friendActionHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    friendActionDangerHovered: {
+      backgroundColor: colors.dangerSoftHover,
+    },
     friendActionSubtle: {
       minWidth: 70,
       backgroundColor: colors.cardMuted,
+    },
+    friendActionSubtleHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    friendActionPressed: {
+      opacity: 0.78,
     },
     friendActionDisabled: {
       opacity: 0.55,

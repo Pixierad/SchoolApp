@@ -238,10 +238,18 @@ export default function ProfileSheet({
             <View style={styles.header}>
               <Text style={styles.title}>Profile</Text>
               <View style={styles.headerActions}>
-                <Pressable onPress={closeWithAnimation} hitSlop={8}>
+                <Pressable
+                  onPress={closeWithAnimation}
+                  hitSlop={8}
+                  style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+                >
                   <Text style={styles.doneText}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={confirmAndClose} hitSlop={8}>
+                <Pressable
+                  onPress={confirmAndClose}
+                  hitSlop={8}
+                  style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+                >
                   <Text style={[styles.doneText, styles.confirmText]}>Confirm</Text>
                 </Pressable>
               </View>
@@ -261,13 +269,24 @@ export default function ProfileSheet({
                   size={76}
                 />
                 <View style={styles.avatarActions}>
-                  <Pressable onPress={handleUploadPress} style={styles.uploadBtn}>
+                  <Pressable
+                    onPress={handleUploadPress}
+                    style={({ pressed, hovered }) => [
+                      styles.uploadBtn,
+                      hovered && styles.uploadBtnHovered,
+                      pressed && styles.uploadBtnPressed,
+                    ]}
+                  >
                     <Text style={styles.uploadBtnText}>Upload image</Text>
                   </Pressable>
                   {draftAvatarType === 'image' ? (
                     <Pressable
                       onPress={() => setAvatar('emoji', AVATAR_EMOJIS[0])}
-                      style={styles.secondaryBtn}
+                      style={({ pressed, hovered }) => [
+                        styles.secondaryBtn,
+                        hovered && styles.secondaryBtnHovered,
+                        pressed && styles.secondaryBtnPressed,
+                      ]}
                     >
                       <Text style={styles.secondaryBtnText}>Use emoji</Text>
                     </Pressable>
@@ -290,7 +309,12 @@ export default function ProfileSheet({
                     <Pressable
                       key={emoji}
                       onPress={() => setAvatar('emoji', emoji)}
-                      style={[styles.emojiOption, selected && styles.emojiOptionSelected]}
+                      style={({ pressed, hovered }) => [
+                        styles.emojiOption,
+                        hovered && styles.emojiOptionHovered,
+                        pressed && styles.emojiOptionPressed,
+                        selected && styles.emojiOptionSelected,
+                      ]}
                       accessibilityLabel={`Use ${emoji} as profile picture`}
                     >
                       <Text style={styles.emojiOptionText}>{emoji}</Text>
@@ -394,6 +418,14 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       fontWeight: '600',
       color: colors.primary,
     },
+    headerTextButtonHovered: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginHorizontal: -spacing.xs,
+      marginVertical: -2,
+    },
     confirmText: {
       fontWeight: '800',
     },
@@ -436,6 +468,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
     },
+    uploadBtnHovered: {
+      backgroundColor: colors.primaryHover,
+    },
+    uploadBtnPressed: {
+      opacity: 0.78,
+    },
     uploadBtnText: {
       color: '#fff',
       fontSize: 14,
@@ -446,6 +484,12 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderRadius: radius.md,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
+    },
+    secondaryBtnHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    secondaryBtnPressed: {
+      opacity: 0.78,
     },
     secondaryBtnText: {
       color: colors.textMuted,
@@ -466,6 +510,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.card,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    emojiOptionHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderStrong,
+    },
+    emojiOptionPressed: {
+      opacity: 0.75,
     },
     emojiOptionSelected: {
       borderColor: colors.primary,
