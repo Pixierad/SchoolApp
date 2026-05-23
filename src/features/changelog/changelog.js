@@ -17,8 +17,8 @@
 
 export const CHANGELOG = [
   {
-    version: '0.2.4',
-    date: '2026-05-19',
+    version: '0.3.0',
+    date: '2026-05-23',
     title: 'Study timer',
     notes: [
       'New: Study timer to help you stay focused and track your study sessions',
@@ -26,7 +26,8 @@ export const CHANGELOG = [
       'Improvement: Timer can be set for custom durations (default 25 minutes)',
       'Improvement: Timer has a break reminder feature to encourage regular breaks',
       'Improvement: Timer runs in the background and sends notifications when time is up',
-      'Improvement: You can now look at other\'s peoples profiles'
+      'Improvement: You can now look at other\'s peoples profiles',
+      'Fixed: friends page crashing'
     ],
   },
   {
