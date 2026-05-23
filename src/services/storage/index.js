@@ -35,6 +35,7 @@ import { DEFAULT_AVATAR_EMOJI, normalizeProfile } from '../../shared/profile';
 const LEGACY_TASKS_KEY = '@simpleapp:tasks:v1';
 const LEGACY_SUBJECTS_KEY = '@simpleapp:subjects:v1';
 const LEGACY_USER_NAME_KEY = '@simpleapp:userName:v1';
+const LEGACY_STUDY_SESSIONS_KEY = '@simpleapp:studySessions:v1';
 const PROFILE_KEY_PREFIX = '@simpleapp:profile:';
 const MIGRATION_FLAG_PREFIX = '@simpleapp:migrated:';
 const PENDING_WRITES_PREFIX = '@simpleapp:pendingWrites:';
@@ -44,6 +45,9 @@ function tasksKey(userId) {
 }
 function subjectsKey(userId) {
   return userId ? `@simpleapp:subjects:${userId}:v1` : LEGACY_SUBJECTS_KEY;
+}
+function studySessionsKey(userId) {
+  return userId ? `@simpleapp:studySessions:${userId}:v1` : LEGACY_STUDY_SESSIONS_KEY;
 }
 function userNameKey(userId) {
   return userId ? `@simpleapp:userName:${userId}:v1` : LEGACY_USER_NAME_KEY;
@@ -140,6 +144,58 @@ function rowToTask(r) {
   };
 }
 
+function safeISODateTime(value, fallback = new Date().toISOString()) {
+  const date = new Date(value || fallback);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+}
+
+export function normalizeStudySession(session = {}) {
+  const now = new Date().toISOString();
+  const startedAt = safeISODateTime(session.startedAt || session.started_at, now);
+  const endedAt = safeISODateTime(session.endedAt || session.ended_at, startedAt);
+  const durationSeconds = Math.max(0, Math.round(Number(
+    session.durationSeconds ?? session.duration_seconds ?? 0
+  )));
+  const plannedSecondsRaw = session.plannedSeconds ?? session.planned_seconds;
+  const plannedSeconds =
+    plannedSecondsRaw == null ? null : Math.max(0, Math.round(Number(plannedSecondsRaw) || 0));
+  const mode = ['pomodoro', 'custom', 'stopwatch'].includes(session.mode)
+    ? session.mode
+    : 'stopwatch';
+
+  return {
+    id: session.id || newId(),
+    subject: typeof session.subject === 'string' && session.subject ? session.subject : null,
+    mode,
+    durationSeconds,
+    plannedSeconds,
+    startedAt,
+    endedAt,
+    note: typeof session.note === 'string' ? session.note : '',
+    createdAt: safeISODateTime(session.createdAt || session.created_at, now),
+  };
+}
+
+function studySessionToRow(session, userId) {
+  const cleaned = normalizeStudySession(session);
+  return {
+    id: cleaned.id,
+    user_id: userId,
+    subject: cleaned.subject,
+    mode: cleaned.mode,
+    duration_seconds: cleaned.durationSeconds,
+    planned_seconds: cleaned.plannedSeconds,
+    started_at: cleaned.startedAt,
+    ended_at: cleaned.endedAt,
+    note: cleaned.note || null,
+    ...(cleaned.createdAt ? { created_at: cleaned.createdAt } : {}),
+  };
+}
+
+function rowToStudySession(row) {
+  return normalizeStudySession(row);
+}
+
 function subjectToRow(s, userId) {
   return {
     user_id: userId,
@@ -166,6 +222,7 @@ function profileToRow(profile, userId) {
     username: cleaned.username || null,
     avatar_type: cleaned.avatarType,
     avatar_value: cleaned.avatarValue || DEFAULT_AVATAR_EMOJI,
+    ...(cleaned.createdAt ? { created_at: cleaned.createdAt } : {}),
   };
 }
 
@@ -176,6 +233,7 @@ function rowToProfile(r, fallbackId = null) {
     username: r?.username ?? '',
     avatarType: r?.avatar_type ?? r?.avatarType ?? 'emoji',
     avatarValue: r?.avatar_value ?? r?.avatarValue ?? DEFAULT_AVATAR_EMOJI,
+    createdAt: r?.created_at ?? r?.createdAt ?? null,
   });
 }
 
@@ -252,6 +310,22 @@ async function applyPendingWrite(uid, op) {
     case 'deleteTask': {
       const { error } = await supabase
         .from('tasks')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', op.id);
+      if (error) throw error;
+      return;
+    }
+    case 'upsertStudySession': {
+      const { error } = await supabase
+        .from('study_sessions')
+        .upsert([studySessionToRow(op.session, uid)], { onConflict: 'id' });
+      if (error) throw error;
+      return;
+    }
+    case 'deleteStudySession': {
+      const { error } = await supabase
+        .from('study_sessions')
         .delete()
         .eq('user_id', uid)
         .eq('id', op.id);
@@ -529,6 +603,113 @@ async function updateLocalTaskCache(uid, mutator) {
 
 // ── Subjects ───────────────────────────────────────────────────────────────
 
+// Study sessions
+
+async function loadCloudStudySessions(uid) {
+  try {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', uid)
+      .order('ended_at', { ascending: false });
+    if (error) throw error;
+    const sessions = (data || []).map(rowToStudySession);
+    AsyncStorage.setItem(studySessionsKey(uid), JSON.stringify(sessions)).catch(() => {});
+    return sessions;
+  } catch (e) {
+    console.warn('Supabase loadStudySessions failed, falling back to cache:', e?.message);
+    return loadLocalStudySessions(uid);
+  }
+}
+
+async function loadLocalStudySessions(uid) {
+  const cached = await readLocalArray(studySessionsKey(uid));
+  return cached.map(normalizeStudySession).filter((session) => session.durationSeconds > 0);
+}
+
+export async function loadStudySessions() {
+  const uid = await cloudMode();
+
+  if (uid) {
+    await flushPendingWrites(uid);
+    return loadCloudStudySessions(uid);
+  }
+
+  return loadLocalStudySessions(null);
+}
+
+export async function upsertStudySession(session) {
+  if (!session) return;
+  const cleaned = normalizeStudySession(session);
+  const uid = await cloudMode();
+
+  if (uid) {
+    await updateLocalStudySessionCache(uid, (prev) => {
+      const idx = prev.findIndex((item) => item.id === cleaned.id);
+      if (idx >= 0) {
+        const next = prev.slice();
+        next[idx] = cleaned;
+        return next;
+      }
+      return [cleaned, ...prev];
+    });
+    return runQueued(async () => {
+      try {
+        const { error } = await supabase
+          .from('study_sessions')
+          .upsert([studySessionToRow(cleaned, uid)], { onConflict: 'id' });
+        if (error) throw error;
+      } catch (e) {
+        return queueIfOffline(uid, { type: 'upsertStudySession', session: cleaned }, e);
+      }
+    });
+  }
+
+  await updateLocalStudySessionCache(null, (prev) => {
+    const idx = prev.findIndex((item) => item.id === cleaned.id);
+    if (idx >= 0) {
+      const next = prev.slice();
+      next[idx] = cleaned;
+      return next;
+    }
+    return [cleaned, ...prev];
+  });
+}
+
+export async function deleteStudySession(id) {
+  if (!id) return;
+  const uid = await cloudMode();
+
+  if (uid) {
+    await updateLocalStudySessionCache(uid, (prev) => prev.filter((item) => item.id !== id));
+    return runQueued(async () => {
+      try {
+        const { error } = await supabase
+          .from('study_sessions')
+          .delete()
+          .eq('user_id', uid)
+          .eq('id', id);
+        if (error) throw error;
+      } catch (e) {
+        return queueIfOffline(uid, { type: 'deleteStudySession', id }, e);
+      }
+    });
+  }
+
+  await updateLocalStudySessionCache(null, (prev) => prev.filter((item) => item.id !== id));
+}
+
+async function updateLocalStudySessionCache(uid, mutator) {
+  const key = studySessionsKey(uid);
+  const current = (await readLocalArray(key)).map(normalizeStudySession);
+  const next = mutator(current)
+    .filter((session) => session.durationSeconds > 0)
+    .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime());
+  await writeLocalArray(key, next);
+}
+
+// Subjects
+
 async function loadCloudSubjects(uid) {
   try {
     const { data, error } = await supabase
@@ -658,7 +839,7 @@ async function loadCloudProfile(uid) {
     // first saveUserName() call will then create the row via upsert.
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, username, avatar_type, avatar_value')
+      .select('id, name, username, avatar_type, avatar_value, created_at')
       .eq('id', uid)
       .maybeSingle();
     if (error) throw error;
@@ -708,20 +889,22 @@ export async function loadAppData() {
   if (uid) {
     await migrateLegacyIfNeeded(uid);
     await flushPendingWrites(uid);
-    const [tasks, subjects, profile] = await Promise.all([
+    const [tasks, subjects, profile, studySessions] = await Promise.all([
       loadCloudTasks(uid),
       loadCloudSubjects(uid),
       loadCloudProfile(uid),
+      loadCloudStudySessions(uid),
     ]);
-    return { tasks, subjects, profile };
+    return { tasks, subjects, profile, studySessions };
   }
 
-  const [tasks, subjects, profile] = await Promise.all([
+  const [tasks, subjects, profile, studySessions] = await Promise.all([
     readLocalArray(tasksKey(null)),
     loadLocalSubjects(null),
     loadLocalProfile(null),
+    loadLocalStudySessions(null),
   ]);
-  return { tasks, subjects, profile };
+  return { tasks, subjects, profile, studySessions };
 }
 
 export async function saveProfile(profile) {
@@ -804,6 +987,32 @@ export async function loadCachedFriends() {
   const uid = await cloudMode();
   if (!uid) return [];
   return readLocalArray(`@simpleapp:friends:${uid}:v1`);
+}
+
+export async function loadFriendStudyProfile(friendId) {
+  const uid = await cloudMode();
+  if (!uid || !friendId) return null;
+
+  const cacheKey = `friendStudy:${uid}:${friendId}`;
+  const cached = readFreshRemoteCache(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase.rpc('get_friend_study_profile', {
+    friend_profile_id: friendId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  const profile = rowToProfile(row, row.id || friendId);
+  const rawSessions = Array.isArray(row.study_sessions)
+    ? row.study_sessions
+    : Array.isArray(row.sessions)
+      ? row.sessions
+      : [];
+  const studySessions = rawSessions.map(rowToStudySession);
+  const result = { profile, studySessions };
+  writeRemoteCache(cacheKey, result);
+  return result;
 }
 
 export async function loadFriendRequests() {

@@ -21,13 +21,15 @@ import {
   declineFriendRequest,
   loadCachedFriendRequests,
   loadCachedFriends,
+  loadFriendStudyProfile,
   loadFriendRequests,
   loadFriends,
   removeFriend,
   searchProfiles,
 } from './friendsRepository';
-import { publicName } from '../../shared/profile';
+import { profileStackingLabel, publicName } from '../../shared/profile';
 import ProfileAvatar from '../profile/ProfileAvatar';
+import StudyHeatmap, { StudySummaryStrip } from '../study/StudyHeatmap';
 
 export default function FriendsSheet({ visible, embedded = false, onClose, session = null }) {
   const { colors, spacing, radius, typography, shadow } = useTheme();
@@ -44,6 +46,10 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [previewPerson, setPreviewPerson] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
 
   const canUseFriends = !!session;
   const screenHeight = Dimensions.get('window').height;
@@ -190,6 +196,32 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
     };
   }, [query, visible, canUseFriends]);
 
+  useEffect(() => {
+    if (!previewPerson?.id || !canUseFriends) {
+      setPreviewData(null);
+      setPreviewLoading(false);
+      setPreviewError(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewData(null);
+    loadFriendStudyProfile(previewPerson.id)
+      .then((data) => {
+        if (!cancelled) setPreviewData(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setPreviewError(e?.message || 'Could not load profile.');
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewPerson?.id, canUseFriends]);
+
   const handleAdd = async (person) => {
     if (!person?.id || busyId) return;
     setBusyId(person.id);
@@ -291,14 +323,15 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
   if (embedded) {
     if (!visible) return null;
     return (
-      <View style={[styles.sheet, styles.embeddedWindow, shadow.card]}>
-        <View style={styles.embeddedHeader}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Friends</Text>
+      <>
+        <View style={[styles.sheet, styles.embeddedWindow, shadow.card]}>
+          <View style={styles.embeddedHeader}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Friends</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.content}>
+          <View style={styles.content}>
           {!canUseFriends ? (
             <View style={styles.notice}>
               <Text style={styles.noticeTitle}>Friend search needs an account</Text>
@@ -339,6 +372,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                         busy={busyId === person.id}
                         onAdd={() => handleAdd(person)}
                         onAccept={() => handleAccept(person)}
+                        onOpenProfile={() => setPreviewPerson(person)}
                         styles={styles}
                       />
                     ))}
@@ -364,6 +398,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                         busy={busyId === person.id}
                         onAccept={() => handleAccept(person)}
                         onDecline={() => handleDecline(person)}
+                        onOpenProfile={() => setPreviewPerson(person)}
                         styles={styles}
                       />
                     ))}
@@ -388,6 +423,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                         busy={busyId === person.id}
                         actionLabel="Requested"
                         disabled
+                        onOpenProfile={() => setPreviewPerson(person)}
                         styles={styles}
                       />
                     ))
@@ -414,6 +450,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                       actionLabel="Remove"
                       danger
                       onPress={() => handleRemove(person)}
+                      onOpenProfile={() => setPreviewPerson(person)}
                       styles={styles}
                     />
                   ))}
@@ -421,18 +458,28 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
               </View>
             </>
           )}
+          </View>
         </View>
-      </View>
+        <ProfilePreviewModal
+          person={previewPerson}
+          data={previewData}
+          loading={previewLoading}
+          error={previewError}
+          onClose={() => setPreviewPerson(null)}
+          styles={styles}
+        />
+      </>
     );
   }
 
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
-      <View style={styles.backdrop}>
-        <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
-        <Animated.View
-          style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
-        >
+    <>
+      <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
+        <View style={styles.backdrop}>
+          <Pressable style={styles.backdropFill} onPress={closeWithAnimation} />
+          <Animated.View
+            style={[styles.sheet, shadow.float, { transform: [{ translateY }] }]}
+          >
           <View style={styles.dragZone} {...panResponder.panHandlers}>
             <View style={styles.handle} />
             <View style={styles.header}>
@@ -488,6 +535,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                           busy={busyId === person.id}
                           onAdd={() => handleAdd(person)}
                           onAccept={() => handleAccept(person)}
+                          onOpenProfile={() => setPreviewPerson(person)}
                           styles={styles}
                         />
                       ))}
@@ -513,6 +561,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                           busy={busyId === person.id}
                           onAccept={() => handleAccept(person)}
                           onDecline={() => handleDecline(person)}
+                          onOpenProfile={() => setPreviewPerson(person)}
                           styles={styles}
                         />
                       ))}
@@ -537,6 +586,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                           busy={busyId === person.id}
                           actionLabel="Requested"
                           disabled
+                          onOpenProfile={() => setPreviewPerson(person)}
                           styles={styles}
                         />
                       ))
@@ -563,6 +613,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                         actionLabel="Remove"
                         danger
                         onPress={() => handleRemove(person)}
+                        onOpenProfile={() => setPreviewPerson(person)}
                         styles={styles}
                       />
                     ))}
@@ -571,13 +622,78 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
               </>
             )}
           </View>
-        </Animated.View>
+          </Animated.View>
+        </View>
+      </Modal>
+      <ProfilePreviewModal
+        person={previewPerson}
+        data={previewData}
+        loading={previewLoading}
+        error={previewError}
+        onClose={() => setPreviewPerson(null)}
+        styles={styles}
+      />
+    </>
+  );
+}
+
+function ProfilePreviewModal({ person, data, loading, error, onClose, styles }) {
+  const profile = data?.profile || person;
+  const sessions = data?.studySessions || [];
+  const name = publicName(profile);
+
+  return (
+    <Modal visible={!!person} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.previewBackdrop}>
+        <Pressable style={styles.backdropFill} onPress={onClose} />
+        <View style={styles.previewPanel}>
+          <View style={styles.previewHeader}>
+            <View style={styles.previewIdentity}>
+              <ProfileAvatar profile={profile} size={58} />
+              <View style={styles.previewTitleBlock}>
+                <Text style={styles.previewName} numberOfLines={1}>{name}</Text>
+                <Text style={styles.previewUsername} numberOfLines={1}>
+                  {profile?.username ? `@${profile.username}` : 'No username'}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              style={({ hovered }) => hovered && styles.headerTextButtonHovered}
+            >
+              <Text style={styles.doneText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.previewContent}>
+            <View style={styles.stackingBox}>
+              <Text style={styles.stackingText}>{profileStackingLabel(profile)}</Text>
+            </View>
+
+            {loading ? (
+              <View style={styles.previewLoading}>
+                <ActivityIndicator />
+                <Text style={styles.emptyText}>Loading study profile...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : (
+              <>
+                <StudySummaryStrip sessions={sessions} />
+                <StudyHeatmap sessions={sessions} compact />
+              </>
+            )}
+          </ScrollView>
+        </View>
       </View>
     </Modal>
   );
 }
 
-function SearchResultRow({ person, busy, onAdd, onAccept, styles }) {
+function SearchResultRow({ person, busy, onAdd, onAccept, onOpenProfile, styles }) {
   if (person.isFriend) {
     return (
       <FriendRow
@@ -585,6 +701,7 @@ function SearchResultRow({ person, busy, onAdd, onAccept, styles }) {
         busy={busy}
         actionLabel="Friends"
         disabled
+        onOpenProfile={onOpenProfile}
         styles={styles}
       />
     );
@@ -597,6 +714,7 @@ function SearchResultRow({ person, busy, onAdd, onAccept, styles }) {
         busy={busy}
         actionLabel="Requested"
         disabled
+        onOpenProfile={onOpenProfile}
         styles={styles}
       />
     );
@@ -606,19 +724,29 @@ function SearchResultRow({ person, busy, onAdd, onAccept, styles }) {
     <FriendRow
       person={person}
       busy={busy}
-      actionLabel={person.incomingRequest ? 'Confirm' : 'Request'}
-      onPress={person.incomingRequest ? onAccept : onAdd}
-      styles={styles}
-    />
+    actionLabel={person.incomingRequest ? 'Confirm' : 'Request'}
+    onPress={person.incomingRequest ? onAccept : onAdd}
+    onOpenProfile={onOpenProfile}
+    styles={styles}
+  />
   );
 }
 
-function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
+function FriendRequestRow({ person, busy, onAccept, onDecline, onOpenProfile, styles }) {
   const name = publicName(person);
   const username = person.username ? `@${person.username}` : 'No username';
 
   return (
-    <View style={styles.friendRow}>
+    <Pressable
+      onPress={onOpenProfile}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${name}'s profile`}
+      style={({ pressed, hovered }) => [
+        styles.friendRow,
+        hovered && styles.friendRowHovered,
+        pressed && styles.friendRowPressed,
+      ]}
+    >
       <ProfileAvatar profile={person} size={42} />
       <View style={styles.friendText}>
         <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
@@ -626,7 +754,10 @@ function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
       </View>
       <View style={styles.requestActions}>
         <Pressable
-          onPress={onDecline}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onDecline?.();
+          }}
           disabled={busy}
           style={({ pressed, hovered }) => [
             styles.friendAction,
@@ -639,7 +770,10 @@ function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
           <Text style={styles.friendActionSubtleText}>Decline</Text>
         </Pressable>
         <Pressable
-          onPress={onAccept}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onAccept?.();
+          }}
           disabled={busy}
           style={({ pressed, hovered }) => [
             styles.friendAction,
@@ -655,23 +789,35 @@ function FriendRequestRow({ person, busy, onAccept, onDecline, styles }) {
           )}
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
-function FriendRow({ person, busy, actionLabel, disabled, danger, onPress, styles }) {
+function FriendRow({ person, busy, actionLabel, disabled, danger, onPress, onOpenProfile, styles }) {
   const name = publicName(person);
   const username = person.username ? `@${person.username}` : 'No username';
 
   return (
-    <View style={styles.friendRow}>
+    <Pressable
+      onPress={onOpenProfile}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${name}'s profile`}
+      style={({ pressed, hovered }) => [
+        styles.friendRow,
+        hovered && styles.friendRowHovered,
+        pressed && styles.friendRowPressed,
+      ]}
+    >
       <ProfileAvatar profile={person} size={42} />
       <View style={styles.friendText}>
         <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
         <Text style={styles.friendUsername} numberOfLines={1}>{username}</Text>
       </View>
       <Pressable
-        onPress={onPress}
+        onPress={(event) => {
+          event.stopPropagation?.();
+          onPress?.();
+        }}
         disabled={disabled || busy}
         style={({ pressed, hovered }) => [
           styles.friendAction,
@@ -689,7 +835,7 @@ function FriendRow({ person, busy, actionLabel, disabled, danger, onPress, style
           </Text>
         )}
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -846,6 +992,13 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       padding: spacing.md,
       gap: spacing.md,
     },
+    friendRowHovered: {
+      backgroundColor: colors.cardHover,
+      borderColor: colors.borderHover,
+    },
+    friendRowPressed: {
+      opacity: 0.78,
+    },
     friendText: {
       flex: 1,
       minWidth: 0,
@@ -907,6 +1060,78 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
     requestActions: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: spacing.sm,
+    },
+    previewBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    previewPanel: {
+      width: '100%',
+      maxWidth: 640,
+      maxHeight: '86%',
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      overflow: 'hidden',
+    },
+    previewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      padding: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    previewIdentity: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    previewTitleBlock: {
+      flex: 1,
+      minWidth: 0,
+    },
+    previewName: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: '900',
+    },
+    previewUsername: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: '700',
+      marginTop: 2,
+    },
+    previewContent: {
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    stackingBox: {
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+      padding: spacing.md,
+    },
+    stackingText: {
+      color: colors.primary,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '800',
+    },
+    previewLoading: {
+      minHeight: 160,
+      alignItems: 'center',
+      justifyContent: 'center',
       gap: spacing.sm,
     },
   });

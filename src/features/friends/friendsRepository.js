@@ -4,6 +4,7 @@ export {
   declineFriendRequest,
   loadCachedFriendRequests,
   loadCachedFriends,
+  loadFriendStudyProfile,
   loadFriendRequests,
   loadFriends,
   removeFriend,

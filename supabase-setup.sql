@@ -15,6 +15,7 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null default '',
+  created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
@@ -38,6 +39,22 @@ create table if not exists public.tasks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.study_sessions (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subject text,
+  mode text not null default 'stopwatch',
+  duration_seconds integer not null default 0,
+  planned_seconds integer,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz not null default now(),
+  note text,
+  created_at timestamptz not null default now(),
+  check (mode in ('stopwatch', 'pomodoro', 'custom')),
+  check (duration_seconds >= 0),
+  check (planned_seconds is null or planned_seconds >= 0)
+);
+
 create table if not exists public.friends (
   user_id uuid not null references auth.users(id) on delete cascade,
   friend_id uuid not null references auth.users(id) on delete cascade,
@@ -58,6 +75,8 @@ create table if not exists public.friend_requests (
 );
 
 create index if not exists tasks_user_id_idx on public.tasks(user_id);
+create index if not exists study_sessions_user_ended_idx
+  on public.study_sessions(user_id, ended_at desc);
 create index if not exists subjects_user_id_idx on public.subjects(user_id);
 create index if not exists friends_user_id_idx on public.friends(user_id);
 create index if not exists friends_friend_id_idx on public.friends(friend_id);
@@ -92,6 +111,7 @@ create unique index if not exists subjects_user_id_name_ci_uniq
 alter table public.profiles enable row level security;
 alter table public.subjects enable row level security;
 alter table public.tasks    enable row level security;
+alter table public.study_sessions enable row level security;
 alter table public.friends  enable row level security;
 alter table public.friend_requests enable row level security;
 
@@ -109,6 +129,11 @@ drop policy if exists "tasks_select_own"      on public.tasks;
 drop policy if exists "tasks_insert_own"      on public.tasks;
 drop policy if exists "tasks_update_own"      on public.tasks;
 drop policy if exists "tasks_delete_own"      on public.tasks;
+
+drop policy if exists "study_sessions_select_own" on public.study_sessions;
+drop policy if exists "study_sessions_insert_own" on public.study_sessions;
+drop policy if exists "study_sessions_update_own" on public.study_sessions;
+drop policy if exists "study_sessions_delete_own" on public.study_sessions;
 
 drop policy if exists "friends_select_own"    on public.friends;
 drop policy if exists "friends_insert_own"    on public.friends;
@@ -146,6 +171,16 @@ create policy "tasks_update_own"
   on public.tasks for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "tasks_delete_own"
   on public.tasks for delete using (auth.uid() = user_id);
+
+-- Study sessions.
+create policy "study_sessions_select_own"
+  on public.study_sessions for select using (auth.uid() = user_id);
+create policy "study_sessions_insert_own"
+  on public.study_sessions for insert with check (auth.uid() = user_id);
+create policy "study_sessions_update_own"
+  on public.study_sessions for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "study_sessions_delete_own"
+  on public.study_sessions for delete using (auth.uid() = user_id);
 
 -- Friends can be read directly, but mutations go through the RPC helpers
 -- below so requests cannot bypass confirmation or create one-sided rows.
@@ -185,11 +220,18 @@ $$;
 -- ------------------------------------------------------------------
 
 alter table public.profiles
+  add column if not exists created_at timestamptz not null default now(),
   add column if not exists theme_key text not null default 'light',
   add column if not exists custom_themes jsonb not null default '[]'::jsonb,
   add column if not exists username text,
   add column if not exists avatar_type text not null default 'emoji',
   add column if not exists avatar_value text not null default '🎓';
+
+update public.profiles p
+set created_at = u.created_at
+from auth.users u
+where p.id = u.id
+  and p.created_at > u.created_at;
 
 create unique index if not exists profiles_username_ci_uniq
   on public.profiles(lower(username))
@@ -205,8 +247,8 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, name)
-  values (new.id, '')
+  insert into public.profiles (id, name, created_at)
+  values (new.id, '', new.created_at)
   on conflict (id) do nothing;
   return new;
 end;
@@ -1396,6 +1438,71 @@ as $$
   select private.hide_chat_room(room_profile_id);
 $$;
 
+drop function if exists public.get_friend_study_profile(uuid);
+create function public.get_friend_study_profile(friend_profile_id uuid)
+returns table (
+  id uuid,
+  name text,
+  username text,
+  avatar_type text,
+  avatar_value text,
+  created_at timestamptz,
+  study_sessions jsonb
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'You must be signed in to view study profiles.';
+  end if;
+
+  if friend_profile_id <> auth.uid()
+    and not exists (
+      select 1
+      from public.friends f
+      where f.user_id = auth.uid()
+        and f.friend_id = friend_profile_id
+    ) then
+    raise exception 'Study profiles are visible only to friends.';
+  end if;
+
+  return query
+  select
+    p.id,
+    p.name,
+    p.username,
+    p.avatar_type,
+    p.avatar_value,
+    p.created_at,
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', ss.id,
+            'subject', ss.subject,
+            'mode', ss.mode,
+            'duration_seconds', ss.duration_seconds,
+            'planned_seconds', ss.planned_seconds,
+            'started_at', ss.started_at,
+            'ended_at', ss.ended_at,
+            'note', ss.note,
+            'created_at', ss.created_at
+          )
+          order by ss.ended_at desc
+        )
+        from public.study_sessions ss
+        where ss.user_id = p.id
+          and ss.ended_at >= now() - interval '370 days'
+      ),
+      '[]'::jsonb
+    ) as study_sessions
+  from public.profiles p
+  where p.id = friend_profile_id;
+end;
+$$;
+
 revoke execute on all functions in schema private from public, anon;
 grant execute on all functions in schema private to authenticated;
 
@@ -1417,6 +1524,7 @@ revoke execute on function public.send_chat_message(uuid, text) from public, ano
 revoke execute on function public.mark_chat_read(uuid) from public, anon;
 revoke execute on function public.set_chat_pinned(uuid, boolean) from public, anon;
 revoke execute on function public.hide_chat_room(uuid) from public, anon;
+revoke execute on function public.get_friend_study_profile(uuid) from public, anon;
 
 grant execute on function public.search_profiles(text) to authenticated;
 grant execute on function public.list_friends() to authenticated;
@@ -1436,3 +1544,4 @@ grant execute on function public.send_chat_message(uuid, text) to authenticated;
 grant execute on function public.mark_chat_read(uuid) to authenticated;
 grant execute on function public.set_chat_pinned(uuid, boolean) to authenticated;
 grant execute on function public.hide_chat_room(uuid) to authenticated;
+grant execute on function public.get_friend_study_profile(uuid) to authenticated;

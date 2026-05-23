@@ -8,9 +8,10 @@ A clean Expo app for tracking schoolwork across web and mobile. Create tasks, ta
 - **Subjects**: custom classes with optional room, teacher, and color.
 - **Filters**: All, Today, Upcoming, Overdue, and Done with live counts.
 - **Progress**: home screen completion summary.
+- **Study**: heatmaps, counted study hours, recent sessions, stopwatch, Pomodoro, and custom timers.
 - **Smart dates**: Today, Tomorrow, In 3 days, and calendar labels.
 - **Accounts**: Supabase email/password and one-time-code sign-in.
-- **Cloud sync**: tasks, subjects, profile name, and theme settings sync through Supabase.
+- **Cloud sync**: tasks, subjects, study sessions, profile details, and theme settings sync through Supabase.
 - **Offline fallback**: local AsyncStorage cache lets the app load recent data if Supabase is temporarily unavailable.
 - **Offline saves**: edits made while disconnected are queued locally and replayed when the app can reach Supabase again.
 - **Themes**: preset themes plus custom light/dark themes.
@@ -80,10 +81,11 @@ npm run dev:app
 
 Supabase stores user-owned rows:
 
-- `profiles`: display name, username, avatar, selected theme, custom themes.
+- `profiles`: display name, username, avatar, account creation date, selected theme, custom themes.
 - `friends`: each user's saved friend list.
 - `subjects`: subject name, room, teacher, color.
 - `tasks`: task title, description, subject name, due date, completion state, created timestamp.
+- `study_sessions`: timer mode, optional subject, duration, planned duration, start/end timestamps, and notes.
 
 The client also keeps an AsyncStorage cache per user so the UI can load quickly and fall back if Supabase is unavailable. When a network write fails because the device is offline, the write is stored in a per-user pending queue and replayed on the next successful data load.
 

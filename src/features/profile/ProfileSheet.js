@@ -15,7 +15,13 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../../shared/theme';
-import { AVATAR_EMOJIS, isValidUsername, normalizeProfile, normalizeUsername } from '../../shared/profile';
+import {
+  AVATAR_EMOJIS,
+  isValidUsername,
+  normalizeProfile,
+  normalizeUsername,
+  profileStackingLabel,
+} from '../../shared/profile';
 import { MAX_PROFILE_IMAGE_BYTES, pickProfileImage } from '../../shared/platform/pickProfileImage';
 import ProfileAvatar from './ProfileAvatar';
 
@@ -348,6 +354,15 @@ export default function ProfileSheet({
                   maxLength={24}
                 />
               </View>
+              <View style={styles.stackingBox}>
+                <Text style={styles.stackingText}>
+                  {profileStackingLabel({
+                    ...resolvedProfile,
+                    name: draftName,
+                    username: draftUsername,
+                  })}
+                </Text>
+              </View>
               {profileError ? (
                 <View style={styles.profileErrorBox}>
                   <Text style={styles.profileErrorText}>{profileError}</Text>
@@ -546,6 +561,19 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderWidth: 0,
       backgroundColor: 'transparent',
       paddingLeft: spacing.xs,
+    },
+    stackingBox: {
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      padding: spacing.md,
+    },
+    stackingText: {
+      color: colors.primary,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '800',
     },
     profileErrorBox: {
       backgroundColor: colors.dangerSoft,

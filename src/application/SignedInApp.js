@@ -29,6 +29,11 @@ import {
   saveProfile,
 } from '../features/profile/profileRepository';
 import {
+  deleteStudySession,
+  normalizeStudySession,
+  upsertStudySession,
+} from '../features/study/studyRepository';
+import {
   loadChangelogLastSeen,
 } from '../features/changelog/changelogRepository';
 import {
@@ -73,9 +78,11 @@ const TaskForm = React.lazy(() => import('../features/tasks/components/TaskForm'
 const SubjectManager = React.lazy(() => import('../features/subjects/SubjectManager'));
 const SettingsSheet = React.lazy(() => import('../features/settings/SettingsSheet'));
 const ProfileSheet = React.lazy(() => import('../features/profile/ProfileSheet'));
+const ProfileOnboarding = React.lazy(() => import('../features/profile/ProfileOnboarding'));
 const ChangelogSheet = React.lazy(() => import('../features/changelog/ChangelogSheet'));
 const FriendsSheet = React.lazy(() => import('../features/friends/FriendsSheet'));
 const ChatSheet = React.lazy(() => import('../features/chat/ChatSheet'));
+const StudyPage = React.lazy(() => import('../features/study/StudyPage'));
 
 const DESKTOP_ROUTE_FALLBACK = { page: 'tasks', chatRoomId: null };
 
@@ -100,6 +107,7 @@ function desktopRouteFromPath(pathname) {
   if (normalized === '/login') return DESKTOP_ROUTE_FALLBACK;
   if (normalized === '/settings') return { page: 'settings', chatRoomId: null };
   if (normalized === '/chats') return { page: 'chats', chatRoomId: null };
+  if (normalized === '/study') return { page: 'study', chatRoomId: null };
   if (normalized === '/subjects') return { page: 'subjects', chatRoomId: null };
   if (normalized === '/friends') return { page: 'friends', chatRoomId: null };
 
@@ -114,6 +122,7 @@ function desktopRouteFromPath(pathname) {
 function desktopPathFor(page, chatRoomId = null) {
   if (page === 'login') return '/login';
   if (page === 'settings') return '/settings';
+  if (page === 'study') return '/study';
   if (page === 'subjects') return '/subjects';
   if (page === 'friends') return '/friends';
   if (page === 'chats') {
@@ -145,6 +154,7 @@ export default function SignedInApp({ session, setSession }) {
 
   const [tasks, setTasks] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [studySessions, setStudySessions] = useState([]);
   const [profile, setProfile] = useState(() => normalizeProfile());
   const [loading, setLoading] = useState(true);
 
@@ -172,6 +182,7 @@ export default function SignedInApp({ session, setSession }) {
   const previousDesktopPageRef = useRef(initialDesktopRouteRef.current.page);
   const pendingDesktopPageRef = useRef(null);
   const [desktopTaskSubjectsVisible, setDesktopTaskSubjectsVisible] = useState(false);
+  const [mobilePage, setMobilePage] = useState('tasks');
   const [enhanceMotion, setEnhanceMotion] = useState(false);
 
   const [taskFormResetKey, setTaskFormResetKey] = useState(0);
@@ -302,10 +313,11 @@ export default function SignedInApp({ session, setSession }) {
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const { tasks: t, subjects: s, profile: p } = await loadAppData();
+      const { tasks: t, subjects: s, profile: p, studySessions: ss = [] } = await loadAppData();
       if (cancelled) return;
       setTasks(t);
       setSubjects(s);
+      setStudySessions(ss);
       setProfile(p);
       setLoading(false);
     })();
@@ -534,9 +546,27 @@ export default function SignedInApp({ session, setSession }) {
 
   const persistProfile = useCallback(
     (nextProfile) => {
-      saveProfile(nextProfile)
+      return saveProfile(nextProfile)
         .then(() => setSyncError(null))
         .catch((e) => reportSyncError('save profile', e));
+    },
+    [reportSyncError]
+  );
+
+  const persistStudySession = useCallback(
+    (session) => {
+      return upsertStudySession(session)
+        .then(() => setSyncError(null))
+        .catch((e) => reportSyncError('save study session', e));
+    },
+    [reportSyncError]
+  );
+
+  const persistDeleteStudySession = useCallback(
+    (id) => {
+      return deleteStudySession(id)
+        .then(() => setSyncError(null))
+        .catch((e) => reportSyncError('delete study session', e));
     },
     [reportSyncError]
   );
@@ -545,9 +575,24 @@ export default function SignedInApp({ session, setSession }) {
     (nextProfile) => {
       const cleaned = normalizeProfile(nextProfile);
       setProfile(cleaned);
-      persistProfile(cleaned);
+      return persistProfile(cleaned);
     },
     [persistProfile]
+  );
+
+  const completeProfileOnboarding = useCallback(
+    async (nextProfile) => {
+      const cleaned = normalizeProfile(nextProfile);
+      try {
+        await saveProfile(cleaned);
+        setSyncError(null);
+        setProfile(cleaned);
+      } catch (e) {
+        reportSyncError('save profile', e);
+        throw e;
+      }
+    },
+    [reportSyncError]
   );
 
   // ── Per-row mutations ─────────────────────────────────────────────────────
@@ -600,6 +645,31 @@ export default function SignedInApp({ session, setSession }) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     persistDeleteTask(id);
   }, [persistDeleteTask]);
+
+  const handleSaveStudySession = useCallback(
+    (session) => {
+      const cleaned = normalizeStudySession(session);
+      setStudySessions((prev) => {
+        const idx = prev.findIndex((item) => item.id === cleaned.id);
+        if (idx >= 0) {
+          const next = prev.slice();
+          next[idx] = cleaned;
+          return next.sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime());
+        }
+        return [cleaned, ...prev];
+      });
+      persistStudySession(cleaned);
+    },
+    [persistStudySession]
+  );
+
+  const handleDeleteStudySession = useCallback(
+    (id) => {
+      setStudySessions((prev) => prev.filter((item) => item.id !== id));
+      persistDeleteStudySession(id);
+    },
+    [persistDeleteStudySession]
+  );
 
   // SubjectManager passes us the full next array. Diff it against current
   // state so we can issue per-row writes. Renames keep task tags attached;
@@ -685,12 +755,14 @@ export default function SignedInApp({ session, setSession }) {
     // silently overwrite legacy local data. Closing the sheet is enough.
     setTasks([]);
     setSubjects([]);
+    setStudySessions([]);
     setProfile(normalizeProfile());
     setProfileVisible(false);
     setSettingsVisible(false);
     setFriendsVisible(false);
     setChatsVisible(false);
     setDesktopPage('tasks');
+    setMobilePage('tasks');
     setDesktopChatRoomId(null);
     setRenderedDesktopPage('tasks');
     previousDesktopPageRef.current = 'tasks';
@@ -716,6 +788,11 @@ export default function SignedInApp({ session, setSession }) {
     else setSubjectMgrVisible(true);
   }, [isDesktopWeb, navigateDesktopPage]);
 
+  const openStudy = useCallback(() => {
+    if (isDesktopWeb) navigateDesktopPage('study');
+    else setMobilePage('study');
+  }, [isDesktopWeb, navigateDesktopPage]);
+
   const openFriends = useCallback(() => {
     if (isDesktopWeb) navigateDesktopPage('friends');
     else setFriendsVisible(true);
@@ -734,13 +811,15 @@ export default function SignedInApp({ session, setSession }) {
   const desktopHeaderTitle =
     desktopPage === 'subjects'
       ? 'Subjects'
-      : desktopPage === 'friends'
-        ? 'Friends'
-        : desktopPage === 'settings'
-          ? 'Settings'
-          : desktopPage === 'chats'
-            ? 'Chats'
-            : 'Your tasks';
+      : desktopPage === 'study'
+        ? 'Study'
+        : desktopPage === 'friends'
+          ? 'Friends'
+          : desktopPage === 'settings'
+            ? 'Settings'
+            : desktopPage === 'chats'
+              ? 'Chats'
+              : 'Your tasks';
   const desktopHeaderKicker =
     desktopPage === 'tasks' ? greeting(publicName(profile)) : desktopPage;
 
@@ -749,6 +828,23 @@ export default function SignedInApp({ session, setSession }) {
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <LoadingSkeleton styles={styles} isDesktopWeb={isDesktopWeb} />
+      </SafeAreaView>
+    );
+  }
+
+  const needsProfileOnboarding =
+    !!sessionUserId && !localAdminSession && (!profile.name.trim() || !profile.username);
+
+  if (needsProfileOnboarding) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <Suspense fallback={<LoadingSkeleton styles={styles} isDesktopWeb={isDesktopWeb} />}>
+          <ProfileOnboarding
+            profile={profile}
+            onComplete={completeProfileOnboarding}
+          />
+        </Suspense>
       </SafeAreaView>
     );
   }
@@ -765,6 +861,7 @@ export default function SignedInApp({ session, setSession }) {
           activePage={desktopPage}
           onToggle={() => setDesktopSidebarCollapsed((value) => !value)}
           onTasks={() => navigateDesktopPage('tasks')}
+          onStudy={openStudy}
           onSubjects={openSubjects}
           onFriends={openFriends}
           onChats={openChats}
@@ -866,6 +963,15 @@ export default function SignedInApp({ session, setSession }) {
             ]}
           >
             <Suspense fallback={<DesktopPageFallback styles={styles} colors={colors} />}>
+              {renderedDesktopPage === 'study' ? (
+                <StudyPage
+                  sessions={studySessions}
+                  subjects={subjects}
+                  isDesktopWeb
+                  onSaveSession={handleSaveStudySession}
+                  onDeleteSession={handleDeleteStudySession}
+                />
+              ) : null}
               {renderedDesktopPage === 'subjects' ? (
                 <SubjectManager
                   visible
@@ -929,6 +1035,18 @@ export default function SignedInApp({ session, setSession }) {
               },
             ]}
           >
+        {!isDesktopWeb && mobilePage === 'study' ? (
+          <Suspense fallback={<DesktopPageFallback styles={styles} colors={colors} />}>
+            <StudyPage
+              sessions={studySessions}
+              subjects={subjects}
+              onBackToTasks={() => setMobilePage('tasks')}
+              onSaveSession={handleSaveStudySession}
+              onDeleteSession={handleDeleteStudySession}
+            />
+          </Suspense>
+        ) : (
+          <>
         {!isDesktopWeb ? (
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
@@ -1024,13 +1142,16 @@ export default function SignedInApp({ session, setSession }) {
             />
           }
         />
+          </>
+        )}
 
         {!isDesktopWeb ? (
           <BottomActionBar
             profile={profile}
             onProfile={() => setProfileVisible(true)}
             onAddTask={openNewTask}
-            onSubjects={openSubjects}
+            onAddSubject={openSubjects}
+            onStudy={openStudy}
             onFriends={openFriends}
             onChats={openChats}
             styles={styles}
@@ -1197,7 +1318,7 @@ function LoadingSkeleton({ styles, isDesktopWeb }) {
         <View style={styles.skeletonSidebar}>
           <View style={[styles.skeletonBlock, styles.skeletonToggle]} />
           <View style={styles.skeletonNav}>
-            {[0, 1, 2, 3].map((item) => (
+            {[0, 1, 2, 3, 4].map((item) => (
               <View key={item} style={[styles.skeletonBlock, styles.skeletonNavItem]} />
             ))}
           </View>
@@ -1894,6 +2015,45 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       justifyContent: 'space-around',
       gap: spacing.xs,
     },
+    bottomActionMenu: {
+      position: 'absolute',
+      bottom: 78,
+      alignSelf: 'center',
+      minWidth: 214,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: spacing.sm,
+      flexDirection: 'row',
+      gap: spacing.sm,
+      zIndex: 2,
+    },
+    bottomActionChoice: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: radius.md,
+      backgroundColor: colors.cardMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+      paddingHorizontal: spacing.sm,
+    },
+    bottomActionChoiceHovered: {
+      backgroundColor: colors.cardMutedHover,
+    },
+    bottomActionChoicePressed: {
+      opacity: 0.78,
+    },
+    bottomActionChoiceIcon: {
+      fontSize: 18,
+      lineHeight: 20,
+    },
+    bottomActionChoiceText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '900',
+    },
     bottomBarBtn: {
       flex: 1,
       minWidth: 0,
@@ -1926,6 +2086,9 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    bottomAddBtnOpen: {
+      backgroundColor: colors.text,
     },
     bottomAddBtnHovered: {
       backgroundColor: colors.primaryHover,

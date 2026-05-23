@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, Modal, Pressable, Text, View } from 'react-native';
 
 import { useTheme } from '../shared/theme';
@@ -36,14 +36,51 @@ export function BottomActionBar({
   profile,
   onProfile,
   onAddTask,
-  onSubjects,
+  onAddSubject,
+  onStudy,
   onFriends,
   onChats,
   styles,
   shadow,
 }) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const chooseAction = (handler) => {
+    setAddMenuOpen(false);
+    handler?.();
+  };
+
   return (
     <View style={[styles.bottomBar, shadow.float]}>
+      {addMenuOpen ? (
+        <View style={[styles.bottomActionMenu, shadow.float]}>
+          <Pressable
+            onPress={() => chooseAction(onAddTask)}
+            accessibilityLabel="Create a new task"
+            accessibilityRole="button"
+            style={({ pressed, hovered }) => [
+              styles.bottomActionChoice,
+              hovered && styles.bottomActionChoiceHovered,
+              pressed && styles.bottomActionChoicePressed,
+            ]}
+          >
+            <Text style={styles.bottomActionChoiceIcon}>{'\u2713'}</Text>
+            <Text style={styles.bottomActionChoiceText}>New task</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => chooseAction(onAddSubject)}
+            accessibilityLabel="Create a new subject"
+            accessibilityRole="button"
+            style={({ pressed, hovered }) => [
+              styles.bottomActionChoice,
+              hovered && styles.bottomActionChoiceHovered,
+              pressed && styles.bottomActionChoicePressed,
+            ]}
+          >
+            <Text style={styles.bottomActionChoiceIcon}>{'\u{1F4DA}'}</Text>
+            <Text style={styles.bottomActionChoiceText}>Subject</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <BarButton
         label="Profile"
         accessibilityLabel="Open profile"
@@ -52,23 +89,24 @@ export function BottomActionBar({
         avatar={<ProfileAvatar profile={profile} size={30} />}
       />
       <BarButton
-        label="Subjects"
-        icon={'\u{1F4DA}'}
-        accessibilityLabel="Manage subjects"
-        onPress={onSubjects}
+        label="Study"
+        icon={'\u23F1\uFE0F'}
+        accessibilityLabel="Open study"
+        onPress={onStudy}
         styles={styles}
       />
       <Pressable
-        onPress={onAddTask}
-        accessibilityLabel="Add task"
+        onPress={() => setAddMenuOpen((value) => !value)}
+        accessibilityLabel="Open add menu"
         accessibilityRole="button"
         style={({ pressed, hovered }) => [
           styles.bottomAddBtn,
+          addMenuOpen && styles.bottomAddBtnOpen,
           hovered && styles.bottomAddBtnHovered,
           pressed && styles.bottomAddBtnPressed,
         ]}
       >
-        <Text style={styles.bottomAddIcon}>+</Text>
+        <Text style={styles.bottomAddIcon}>{addMenuOpen ? '\u00D7' : '+'}</Text>
       </Pressable>
       <BarButton
         label="Friends"
@@ -90,6 +128,7 @@ export function BottomActionBar({
 
 const SIDEBAR_ITEMS = [
   { key: 'tasks', label: 'Tasks', icon: '\u2713' },
+  { key: 'study', label: 'Study', icon: '\u23F1\uFE0F' },
   { key: 'chats', label: 'Chats', icon: '\u{1F4AC}' },
   { key: 'subjects', label: 'Subjects', icon: '\u{1F4DA}' },
   { key: 'friends', label: 'Friends', icon: '\u{1F465}' },
@@ -103,6 +142,7 @@ export function DesktopSidebar({
   activePage,
   onToggle,
   onTasks,
+  onStudy,
   onSubjects,
   onFriends,
   onChats,
@@ -132,6 +172,7 @@ export function DesktopSidebar({
   });
   const actions = {
     tasks: onTasks,
+    study: onStudy,
     chats: onChats,
     subjects: onSubjects,
     friends: onFriends,
