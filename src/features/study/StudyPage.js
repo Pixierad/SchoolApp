@@ -41,6 +41,7 @@ export default function StudyPage({
 
   const [mode, setMode] = useState('stopwatch');
   const [selectedSubject, setSelectedSubject] = useState('');
+  const [sessionTitle, setSessionTitle] = useState('');
   const [customMinutes, setCustomMinutes] = useState('45');
   const [activeTimer, setActiveTimer] = useState(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -77,6 +78,7 @@ export default function StudyPage({
     setActiveTimer({
       status: 'running',
       mode,
+      title: sessionTitle.trim(),
       subject: selectedSubject || null,
       plannedSeconds,
       accumulatedSeconds: 0,
@@ -84,7 +86,7 @@ export default function StudyPage({
       startedAtISO: new Date(now).toISOString(),
     });
     setNowMs(now);
-  }, [customMinutes, mode, selectedSubject]);
+  }, [customMinutes, mode, selectedSubject, sessionTitle]);
 
   const pauseTimer = useCallback(() => {
     if (!activeTimer || activeTimer.status !== 'running') return;
@@ -114,6 +116,7 @@ export default function StudyPage({
     const durationSeconds = Math.max(1, elapsedSeconds);
     const session = normalizeStudySession({
       id: newId(),
+      title: activeTimer.title,
       subject: activeTimer.subject,
       mode: activeTimer.mode,
       plannedSeconds: activeTimer.plannedSeconds,
@@ -123,6 +126,7 @@ export default function StudyPage({
     });
     onSaveSession?.(session);
     setActiveTimer(null);
+    setSessionTitle('');
   }, [activeTimer, elapsedSeconds, onSaveSession]);
 
   const discardTimer = useCallback(() => {
@@ -195,7 +199,7 @@ export default function StudyPage({
               <View>
                 <Text style={styles.kicker}>Timer</Text>
                 <Text style={styles.panelTitle}>
-                  {activeTimer ? modeLabel(activeTimer.mode) : 'New study session'}
+                  {activeTimer ? activeTimer.title || modeLabel(activeTimer.mode) : 'New study session'}
                 </Text>
               </View>
               {timerComplete ? (
@@ -234,6 +238,19 @@ export default function StudyPage({
                       </Pressable>
                     );
                   })}
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Session name</Text>
+                  <TextInput
+                    value={sessionTitle}
+                    onChangeText={setSessionTitle}
+                    placeholder="e.g. Biology revision"
+                    placeholderTextColor={colors.textFaint}
+                    style={styles.input}
+                    returnKeyType="done"
+                    maxLength={80}
+                  />
                 </View>
 
                 {mode === 'custom' ? (
@@ -433,15 +450,23 @@ function SessionRow({ session, subjects, onDelete, styles, colors, colorForSubje
     ? resolveSubjectStyle(session.subject, subjects, { colorForSubject, isDark })
     : { bg: colors.cardMuted, fg: colors.textMuted };
 
+  const title = session.title || session.subject || modeLabel(session.mode);
+  const metaParts = [
+    modeLabel(session.mode),
+    session.title && session.subject ? session.subject : null,
+    sessionDateLabel(session.endedAt),
+    sessionTimeLabel(session.endedAt),
+  ].filter(Boolean);
+
   return (
     <View style={styles.sessionRow}>
       <View style={[styles.sessionDot, { backgroundColor: color.fg }]} />
       <View style={styles.sessionText}>
         <Text style={styles.sessionTitle} numberOfLines={1}>
-          {session.subject || modeLabel(session.mode)}
+          {title}
         </Text>
         <Text style={styles.sessionMeta} numberOfLines={1}>
-          {modeLabel(session.mode)} {'\u00B7'} {sessionDateLabel(session.endedAt)} {'\u00B7'} {sessionTimeLabel(session.endedAt)}
+          {metaParts.join(' \u00B7 ')}
         </Text>
       </View>
       <View style={styles.sessionDurationWrap}>
@@ -612,6 +637,21 @@ const makeStyles = ({ colors, spacing, radius, typography, isDesktopWeb }) =>
     fieldLabel: {
       ...typography.label,
       textTransform: 'uppercase',
+    },
+    field: {
+      gap: spacing.sm,
+    },
+    input: {
+      minHeight: 44,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
     },
     minuteInput: {
       width: 96,

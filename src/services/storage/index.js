@@ -165,6 +165,10 @@ export function normalizeStudySession(session = {}) {
 
   return {
     id: session.id || newId(),
+    title:
+      typeof (session.title ?? session.name) === 'string'
+        ? String(session.title ?? session.name).trim().slice(0, 80)
+        : '',
     subject: typeof session.subject === 'string' && session.subject ? session.subject : null,
     mode,
     durationSeconds,
@@ -181,6 +185,7 @@ function studySessionToRow(session, userId) {
   return {
     id: cleaned.id,
     user_id: userId,
+    title: cleaned.title || null,
     subject: cleaned.subject,
     mode: cleaned.mode,
     duration_seconds: cleaned.durationSeconds,

@@ -85,7 +85,7 @@ Supabase stores user-owned rows:
 - `friends`: each user's saved friend list.
 - `subjects`: subject name, room, teacher, color.
 - `tasks`: task title, description, subject name, due date, completion state, created timestamp.
-- `study_sessions`: timer mode, optional subject, duration, planned duration, start/end timestamps, and notes.
+- `study_sessions`: session title, timer mode, optional subject, duration, planned duration, start/end timestamps, and notes.
 
 The client also keeps an AsyncStorage cache per user so the UI can load quickly and fall back if Supabase is unavailable. When a network write fails because the device is offline, the write is stored in a per-user pending queue and replayed on the next successful data load.
 

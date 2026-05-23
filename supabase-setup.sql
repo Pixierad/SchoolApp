@@ -42,6 +42,7 @@ create table if not exists public.tasks (
 create table if not exists public.study_sessions (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
+  title text,
   subject text,
   mode text not null default 'stopwatch',
   duration_seconds integer not null default 0,
@@ -54,6 +55,9 @@ create table if not exists public.study_sessions (
   check (duration_seconds >= 0),
   check (planned_seconds is null or planned_seconds >= 0)
 );
+
+alter table public.study_sessions
+  add column if not exists title text;
 
 create table if not exists public.friends (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -1481,6 +1485,7 @@ begin
         select jsonb_agg(
           jsonb_build_object(
             'id', ss.id,
+            'title', ss.title,
             'subject', ss.subject,
             'mode', ss.mode,
             'duration_seconds', ss.duration_seconds,

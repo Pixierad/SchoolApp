@@ -17,7 +17,20 @@
 
 export const CHANGELOG = [
   {
-    version: '1.2.4',
+    version: '0.2.4',
+    date: '2026-05-19',
+    title: 'Study timer',
+    notes: [
+      'New: Study timer to help you stay focused and track your study sessions',
+      'Improvement: Added a timer tab for easy access to the study timer',
+      'Improvement: Timer can be set for custom durations (default 25 minutes)',
+      'Improvement: Timer has a break reminder feature to encourage regular breaks',
+      'Improvement: Timer runs in the background and sends notifications when time is up',
+      'Improvement: You can now look at other\'s peoples profiles'
+    ],
+  },
+  {
+    version: '0.2.4',
     date: '2026-05-19',
     title: 'Even MORE QoL improvements',
     notes: [
@@ -29,7 +42,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.2.3',
+    version: '0.2.3',
     date: '2026-05-17',
     title: 'QoL improvements',
     notes: [
@@ -44,7 +57,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.2.2',
+    version: '0.2.2',
     date: '2026-05-16',
     title: 'Better socialising',
     notes: [
@@ -54,7 +67,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.2.1',
+    version: '0.2.1',
     date: '2026-05-15',
     title: 'Chatrooms',
     notes: [
@@ -64,7 +77,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.2.0',
+    version: '0.2.0',
     date: '2026-05-14',
     title: 'Friends are cool lol',
     notes: [
@@ -75,7 +88,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.1.0 (PATCH)',
+    version: '0.1.0 (PATCH)',
     date: '2026-04-25',
     title: 'Hotfix: deployment rejection fixed',
     notes: [
@@ -84,7 +97,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.1.0',
+    version: '0.1.0',
     date: '2026-04-25',
     title: 'Reliability pass and What\'s new',
     notes: [
@@ -98,7 +111,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    version: '1.0.0',
+    version: '0.0.1',
     date: '2026-04-20',
     title: 'Initial public release',
     notes: [

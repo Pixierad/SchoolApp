@@ -101,9 +101,35 @@ function colorForDay(seconds, maxSeconds, colors) {
   if (!seconds) return colors.cardMuted;
   const ratio = Math.max(0.12, Math.min(1, seconds / Math.max(1, maxSeconds)));
   if (ratio > 0.75) return colors.primary;
-  if (ratio > 0.45) return colors.success;
-  if (ratio > 0.2) return colors.successSoftHover || colors.successSoft;
+  if (ratio > 0.45) return mixHex(colors.primarySoft, colors.primary, 0.68);
+  if (ratio > 0.2) return mixHex(colors.primarySoft, colors.primary, 0.38);
   return colors.primarySoft;
+}
+
+function mixHex(from, to, amount) {
+  const a = parseHex(from);
+  const b = parseHex(to);
+  if (!a || !b) return to || from;
+  const t = Math.max(0, Math.min(1, amount));
+  const channel = (start, end) => Math.round(start + (end - start) * t);
+  return `#${toHex(channel(a.r, b.r))}${toHex(channel(a.g, b.g))}${toHex(channel(a.b, b.b))}`;
+}
+
+function parseHex(value) {
+  if (typeof value !== 'string') return null;
+  let hex = value.trim().replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map((part) => part + part).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+  const number = parseInt(hex, 16);
+  return {
+    r: (number >> 16) & 255,
+    g: (number >> 8) & 255,
+    b: number & 255,
+  };
+}
+
+function toHex(value) {
+  return value.toString(16).padStart(2, '0');
 }
 
 const makeStyles = ({ colors, spacing, radius, typography, compact }) =>
