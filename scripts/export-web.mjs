@@ -41,10 +41,10 @@ function timestamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
   return [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-  ].join('-') + ` ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    now.getUTCFullYear(),
+    pad(now.getUTCMonth() + 1),
+    pad(now.getUTCDate()),
+  ].join('-') + ` ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} UTC`;
 }
 
 function dotenvLine(key, value) {
