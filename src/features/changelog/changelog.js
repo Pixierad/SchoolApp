@@ -17,6 +17,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.3.1',
+    date: '2026-05-23',
+    title: 'Minor Backend changes',
+    notes: [
+      'Improvement: Backend is now split into multiple services for better reliability and scalability',
+      'Improvement: Migrated to cloudflare for future lts'
+    ],
+  },
+  {
     version: '0.3.0',
     date: '2026-05-23',
     title: 'Study timer',
