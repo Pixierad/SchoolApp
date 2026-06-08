@@ -74,6 +74,72 @@ import {
 
 const ENHANCE_MOTION_STORAGE_KEY = '@schoolapp:enhanceMotion:v1';
 
+function notificationSourceKey(notification = {}) {
+  if (notification.sourceKey) return notification.sourceKey;
+  const sourceType = notification.sourceType || notification.type || 'general';
+  if (notification.sourceId) return `${sourceType}:${notification.sourceId}`;
+  if (sourceType === 'deadline' || sourceType === 'event') return sourceType;
+  return `${sourceType}:${notification.id || newId()}`;
+}
+
+function groupedTitle(notification, count) {
+  if (count <= 1) return notification.title || 'Notification';
+  if (notification.groupTitle) {
+    return notification.groupTitle.replace('{count}', String(count));
+  }
+  if (notification.type === 'message') return `${count} new messages`;
+  if (notification.type === 'deadline') return `${count} upcoming deadlines`;
+  if (notification.type === 'event') return `${count} scheduled events`;
+  return `${count} notifications`;
+}
+
+function normalizeNotification(notification = {}) {
+  const eventId = notification.eventId || notification.id || newId();
+  const sourceKey = notificationSourceKey({ ...notification, id: eventId });
+  const count = Number(notification.count || 1);
+  const next = {
+    id: sourceKey,
+    eventId,
+    eventIds: [eventId],
+    sourceKey,
+    sourceType: notification.sourceType || notification.type || 'general',
+    sourceId: notification.sourceId || null,
+    type: notification.type || 'general',
+    groupTitle: notification.groupTitle || null,
+    title: notification.title || 'Notification',
+    body: notification.body || '',
+    createdAt: notification.createdAt || new Date().toISOString(),
+    count,
+  };
+  return {
+    ...next,
+    title: groupedTitle(next, count),
+  };
+}
+
+function mergeNotificationGroup(existing, notification) {
+  if (!existing) return normalizeNotification(notification);
+  const nextEventId = notification.eventId || notification.id || newId();
+  if ((existing.eventIds || []).includes(nextEventId)) return existing;
+  const count = Number(existing.count || 1) + 1;
+  const next = {
+    ...existing,
+    eventId: nextEventId,
+    eventIds: [...(existing.eventIds || []), nextEventId].slice(-25),
+    sourceType: notification.sourceType || existing.sourceType,
+    sourceId: notification.sourceId || existing.sourceId,
+    type: notification.type || existing.type,
+    groupTitle: notification.groupTitle || existing.groupTitle,
+    body: notification.body || existing.body,
+    createdAt: notification.createdAt || new Date().toISOString(),
+    count,
+  };
+  return {
+    ...next,
+    title: groupedTitle(next, count),
+  };
+}
+
 const TaskForm = React.lazy(() => import('../features/tasks/components/TaskForm'));
 const SubjectManager = React.lazy(() => import('../features/subjects/SubjectManager'));
 const SettingsSheet = React.lazy(() => import('../features/settings/SettingsSheet'));
@@ -178,6 +244,7 @@ export default function SignedInApp({ session, setSession }) {
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [desktopPage, setDesktopPage] = useState(initialDesktopRouteRef.current.page);
   const [desktopChatRoomId, setDesktopChatRoomId] = useState(initialDesktopRouteRef.current.chatRoomId);
+  const [mobileChatRoomId, setMobileChatRoomId] = useState(null);
   const [renderedDesktopPage, setRenderedDesktopPage] = useState(initialDesktopRouteRef.current.page);
   const previousDesktopPageRef = useRef(initialDesktopRouteRef.current.page);
   const pendingDesktopPageRef = useRef(null);
@@ -207,6 +274,8 @@ export default function SignedInApp({ session, setSession }) {
   }, [renderedDesktopPage]);
   const notifiedFriendRequestsRef = useRef(new Set());
   const notifiedMessagesRef = useRef(new Set());
+  const activeChatRoomIdRef = useRef(null);
+  const notificationsRef = useRef([]);
 
   const applyDesktopRoute = useCallback((route) => {
     setDesktopPage(route.page);
@@ -326,21 +395,47 @@ export default function SignedInApp({ session, setSession }) {
     };
   }, [session, sessionUserId]);
 
+  const activeChatRoomId = isDesktopWeb
+    ? desktopPage === 'chats' ? desktopChatRoomId : null
+    : chatsVisible ? mobileChatRoomId : null;
+
   const addNotification = useCallback((notification) => {
-    const next = {
-      id: notification.id || newId(),
-      type: notification.type || 'general',
-      title: notification.title || 'Notification',
-      body: notification.body || '',
-      createdAt: notification.createdAt || new Date().toISOString(),
-    };
-    setNotifications((prev) => [next, ...prev.filter((item) => item.id !== next.id)].slice(0, 50));
-    setActiveBanner(next);
+    const incoming = normalizeNotification(notification);
+    const sourceKey = incoming.sourceKey;
+    const existing = notificationsRef.current.find((item) => item.sourceKey === sourceKey);
+    const nextNotification = mergeNotificationGroup(existing, incoming);
+    const nextNotifications = [
+      nextNotification,
+      ...notificationsRef.current.filter((item) => item.sourceKey !== sourceKey),
+    ].slice(0, 50);
+    notificationsRef.current = nextNotifications;
+    setNotifications(nextNotifications);
+    setActiveBanner(nextNotification);
   }, []);
 
   const dismissActiveBanner = useCallback(() => {
     setActiveBanner(null);
   }, []);
+
+  const clearNotificationsForSource = useCallback((sourceType, sourceId) => {
+    if (!sourceType || !sourceId) return;
+    const sourceKey = `${sourceType}:${sourceId}`;
+    const nextNotifications = notificationsRef.current.filter((item) => item.sourceKey !== sourceKey);
+    notificationsRef.current = nextNotifications;
+    setNotifications(nextNotifications);
+    setActiveBanner((current) => (current?.sourceKey === sourceKey ? null : current));
+  }, []);
+
+  const clearAllNotifications = useCallback(() => {
+    notificationsRef.current = [];
+    setNotifications([]);
+    setActiveBanner(null);
+  }, []);
+
+  useEffect(() => {
+    activeChatRoomIdRef.current = activeChatRoomId;
+    if (activeChatRoomId) clearNotificationsForSource('chat', activeChatRoomId);
+  }, [activeChatRoomId, clearNotificationsForSource]);
 
   useEffect(() => {
     if (!sessionUserId) return undefined;
@@ -357,7 +452,10 @@ export default function SignedInApp({ session, setSession }) {
         const person = requests.incoming.find((item) => item.id === row.requester_id);
         addNotification({
           id: `friend:${requestKey}`,
+          eventId: requestKey,
           type: 'friend',
+          sourceType: 'friend',
+          sourceId: row.requester_id,
           title: 'New friend request',
           body: `${publicName(person)} wants to be friends.`,
           createdAt: row.created_at,
@@ -365,7 +463,10 @@ export default function SignedInApp({ session, setSession }) {
       } catch {
         addNotification({
           id: `friend:${requestKey}`,
+          eventId: requestKey,
           type: 'friend',
+          sourceType: 'friend',
+          sourceId: row?.requester_id || requestKey,
           title: 'New friend request',
           body: 'Someone wants to be friends.',
           createdAt: row?.created_at,
@@ -374,6 +475,7 @@ export default function SignedInApp({ session, setSession }) {
     });
 
     const unsubscribeMessages = subscribeToChatNotifications(sessionUserId, async (row) => {
+      if (row?.room_id && activeChatRoomIdRef.current === row.room_id) return;
       if (!row?.id || notifiedMessagesRef.current.has(row.id)) return;
       notifiedMessagesRef.current.add(row.id);
 
@@ -385,7 +487,11 @@ export default function SignedInApp({ session, setSession }) {
         const senderName = publicName(sender) || 'Someone';
         addNotification({
           id: `message:${row.id}`,
+          eventId: row.id,
           type: 'message',
+          sourceType: 'chat',
+          sourceId: row.room_id,
+          groupTitle: `{count} new messages in ${chatName}`,
           title: `New message from ${senderName} in ${chatName}`,
           body: shortNotificationBody(row.body),
           createdAt: row.created_at,
@@ -393,7 +499,11 @@ export default function SignedInApp({ session, setSession }) {
       } catch {
         addNotification({
           id: `message:${row.id}`,
+          eventId: row.id,
           type: 'message',
+          sourceType: 'chat',
+          sourceId: row?.room_id || row.id,
+          groupTitle: '{count} new messages',
           title: 'New message',
           body: shortNotificationBody(row.body),
           createdAt: row?.created_at,
@@ -764,11 +874,13 @@ export default function SignedInApp({ session, setSession }) {
     setDesktopPage('tasks');
     setMobilePage('tasks');
     setDesktopChatRoomId(null);
+    setMobileChatRoomId(null);
     setRenderedDesktopPage('tasks');
     previousDesktopPageRef.current = 'tasks';
     pendingDesktopPageRef.current = null;
     writeDesktopPath(isSupabaseConfigured ? 'login' : 'tasks', null, { replace: true });
     setNotificationsVisible(false);
+    notificationsRef.current = [];
     setNotifications([]);
     setActiveBanner(null);
     notifiedFriendRequestsRef.current.clear();
@@ -798,10 +910,25 @@ export default function SignedInApp({ session, setSession }) {
     else setFriendsVisible(true);
   }, [isDesktopWeb, navigateDesktopPage]);
 
-  const openChats = useCallback(() => {
-    if (isDesktopWeb) navigateDesktopPage('chats');
-    else setChatsVisible(true);
-  }, [isDesktopWeb, navigateDesktopPage]);
+  const openChats = useCallback((chatRoomId = null) => {
+    if (chatRoomId) clearNotificationsForSource('chat', chatRoomId);
+    if (isDesktopWeb) {
+      navigateDesktopPage('chats', chatRoomId);
+    } else {
+      setMobileChatRoomId(chatRoomId);
+      setChatsVisible(true);
+    }
+  }, [clearNotificationsForSource, isDesktopWeb, navigateDesktopPage]);
+
+  const handleDesktopChatRoomChange = useCallback((chatRoomId) => {
+    if (chatRoomId) clearNotificationsForSource('chat', chatRoomId);
+    navigateDesktopPage('chats', chatRoomId);
+  }, [clearNotificationsForSource, navigateDesktopPage]);
+
+  const handleMobileChatRoomChange = useCallback((chatRoomId) => {
+    setMobileChatRoomId(chatRoomId);
+    if (chatRoomId) clearNotificationsForSource('chat', chatRoomId);
+  }, [clearNotificationsForSource]);
 
   const openSettings = useCallback(() => {
     if (isDesktopWeb) navigateDesktopPage('settings');
@@ -996,7 +1123,7 @@ export default function SignedInApp({ session, setSession }) {
                   visible
                   embedded
                   activeRoomId={desktopChatRoomId}
-                  onRoomChange={(roomId) => navigateDesktopPage('chats', roomId)}
+                  onRoomChange={handleDesktopChatRoomChange}
                   onClose={() => navigateDesktopPage('tasks')}
                   session={session}
                   profile={profile}
@@ -1253,7 +1380,12 @@ export default function SignedInApp({ session, setSession }) {
         {chatsVisible ? (
           <ChatSheet
             visible
-            onClose={() => setChatsVisible(false)}
+            activeRoomId={mobileChatRoomId}
+            onRoomChange={handleMobileChatRoomChange}
+            onClose={() => {
+              setChatsVisible(false);
+              setMobileChatRoomId(null);
+            }}
             session={session}
             profile={profile}
           />
@@ -1272,11 +1404,11 @@ export default function SignedInApp({ session, setSession }) {
         visible={notificationsVisible}
         notifications={notifications}
         onClose={() => setNotificationsVisible(false)}
-        onClear={() => setNotifications([])}
+        onClear={clearAllNotifications}
         onPressNotification={(notification) => {
           setNotificationsVisible(false);
           if (notification.type === 'friend') openFriends();
-          if (notification.type === 'message') openChats();
+          if (notification.type === 'message') openChats(notification.sourceId);
         }}
         styles={styles}
         shadow={shadow}

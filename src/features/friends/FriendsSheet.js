@@ -166,7 +166,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
   useEffect(() => {
     if (!visible || !canUseFriends) return;
     const term = query.trim();
-    if (term.length < 2) {
+    if (term.length < 1) {
       setResults([]);
       setSearching(false);
       return;
@@ -382,7 +382,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                     ))}
                   </ScrollView>
                 ) : null}
-                {query.trim().length >= 2 && !searching && results.length === 0 ? (
+                {query.trim().length >= 1 && !searching && results.length === 0 ? (
                   <Text style={styles.emptyText}>No matching profiles yet.</Text>
                 ) : null}
               </View>
@@ -547,7 +547,7 @@ export default function FriendsSheet({ visible, embedded = false, onClose, sessi
                       ))}
                     </ScrollView>
                   ) : null}
-                  {query.trim().length >= 2 && !searching && results.length === 0 ? (
+                  {query.trim().length >= 1 && !searching && results.length === 0 ? (
                     <Text style={styles.emptyText}>No matching profiles yet.</Text>
                   ) : null}
                 </View>

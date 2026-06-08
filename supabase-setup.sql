@@ -315,7 +315,7 @@ as $$
   from public.profiles p
   where auth.uid() is not null
     and p.id <> auth.uid()
-    and length(trim(search_term)) >= 2
+    and length(trim(search_term)) >= 1
     and (
       p.name ilike '%' || trim(search_term) || '%'
       or p.username ilike '%' || trim(search_term) || '%'

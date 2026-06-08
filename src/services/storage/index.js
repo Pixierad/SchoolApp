@@ -953,7 +953,7 @@ export async function saveUserName(name) {
 export async function searchProfiles(query) {
   const uid = await cloudMode();
   const term = String(query || '').trim();
-  if (!uid || term.length < 2) return [];
+  if (!uid || term.length < 1) return [];
 
   const { data, error } = await supabase.rpc('search_profiles', { search_term: term });
   if (error) throw error;
