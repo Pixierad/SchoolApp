@@ -12,7 +12,7 @@
 // release notes can be reviewed in code review (and bumped in the same
 // commit as the feature being shipped).
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ export default function ChangelogSheet({ visible, entries = [], onClose }) {
     () => makeStyles({ colors, spacing, radius, typography }),
     [colors, spacing, radius, typography]
   );
+  const [expandedVersions, setExpandedVersions] = useState(() => new Set());
 
   // Lazily allocate the Animated.Value so re-renders don't churn it.
   const translateYRef = useRef(null);
@@ -64,6 +65,7 @@ export default function ChangelogSheet({ visible, entries = [], onClose }) {
       }).start();
       const latest = entries[0]?.version;
       if (latest) saveChangelogLastSeen(latest);
+      setExpandedVersions(new Set(latest ? [latest] : []));
     }
   }, [visible, translateY, screenHeight, entries]);
 
@@ -110,6 +112,18 @@ export default function ChangelogSheet({ visible, entries = [], onClose }) {
     });
   }
 
+  const toggleEntry = (version) => {
+    setExpandedVersions((current) => {
+      const next = new Set(current);
+      if (next.has(version)) {
+        next.delete(version);
+      } else {
+        next.add(version);
+      }
+      return next;
+    });
+  };
+
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={closeWithAnimation}>
       <View style={styles.backdrop}>
@@ -133,32 +147,58 @@ export default function ChangelogSheet({ visible, entries = [], onClose }) {
                 No release notes yet. Check back after the next update.
               </Text>
             ) : (
-              entries.map((entry, idx) => (
-                <View key={entry.version} style={styles.entry}>
-                  <View style={styles.entryHeader}>
-                    <View style={styles.versionPill}>
-                      <Text style={styles.versionPillText}>v{entry.version}</Text>
-                    </View>
-                    <Text style={styles.entryDate}>{formatDate(entry.date)}</Text>
-                    {idx === 0 ? (
-                      <View style={styles.latestPill}>
-                        <Text style={styles.latestPillText}>Latest</Text>
+              entries.map((entry, idx) => {
+                const expanded = expandedVersions.has(entry.version);
+                return (
+                  <View key={entry.version} style={styles.entry}>
+                    <Pressable
+                      onPress={() => toggleEntry(entry.version)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} version ${entry.version}`}
+                      accessibilityState={{ expanded }}
+                      style={({ pressed, hovered }) => [
+                        styles.entryToggle,
+                        hovered && styles.entryToggleHovered,
+                        pressed && styles.entryTogglePressed,
+                      ]}
+                    >
+                      <View style={styles.entrySummary}>
+                        <View style={styles.entrySummaryText}>
+                          <View style={styles.entryHeader}>
+                            <View style={styles.versionPill}>
+                              <Text style={styles.versionPillText}>v{entry.version}</Text>
+                            </View>
+                            <Text style={styles.entryDate}>{formatDate(entry.date)}</Text>
+                            {idx === 0 ? (
+                              <View style={styles.latestPill}>
+                                <Text style={styles.latestPillText}>Latest</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          {entry.title ? (
+                            <Text style={styles.entryTitle} numberOfLines={expanded ? undefined : 1}>
+                              {entry.title}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.expandIcon}>
+                          <Text style={styles.expandIconText}>{expanded ? '-' : '+'}</Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                    {expanded ? (
+                      <View style={styles.notes}>
+                        {entry.notes.map((note, i) => (
+                          <View key={i} style={styles.noteRow}>
+                            <Text style={styles.noteBullet}>{'\u2022'}</Text>
+                            <Text style={styles.noteText}>{note}</Text>
+                          </View>
+                        ))}
                       </View>
                     ) : null}
                   </View>
-                  {entry.title ? (
-                    <Text style={styles.entryTitle}>{entry.title}</Text>
-                  ) : null}
-                  <View style={styles.notes}>
-                    {entry.notes.map((note, i) => (
-                      <View key={i} style={styles.noteRow}>
-                        <Text style={styles.noteBullet}>{'\u2022'}</Text>
-                        <Text style={styles.noteText}>{note}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </ScrollView>
         </Animated.View>
@@ -234,7 +274,7 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.sm,
       paddingBottom: spacing.xl,
-      gap: spacing.lg,
+      gap: spacing.md,
     },
     empty: {
       ...typography.bodyMuted,
@@ -248,6 +288,26 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       borderColor: colors.border,
       padding: spacing.lg,
       gap: spacing.sm,
+    },
+    entryToggle: {
+      borderRadius: radius.md,
+    },
+    entryToggleHovered: {
+      backgroundColor: colors.surface,
+    },
+    entryTogglePressed: {
+      opacity: 0.8,
+    },
+    entrySummary: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    entrySummaryText: {
+      flex: 1,
+      gap: spacing.sm,
+      minWidth: 0,
     },
     entryHeader: {
       flexDirection: 'row',
@@ -288,6 +348,23 @@ const makeStyles = ({ colors, spacing, radius, typography }) =>
       ...typography.body,
       fontWeight: '700',
       fontSize: 16,
+    },
+    expandIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    expandIconText: {
+      ...typography.body,
+      color: colors.text,
+      fontWeight: '700',
+      fontSize: 18,
+      lineHeight: 22,
     },
     notes: {
       gap: spacing.xs,
