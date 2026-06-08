@@ -114,7 +114,7 @@ Both values are required for the web login and sign-out flow. If either one is
 missing, the website will stay on `/login` and show a configuration message
 instead of silently opening the local-only app.
 
-The `public/_redirects` file rewrites app routes such as `/login`, `/study`, `/friends`, `/subjects`, and `/chats/:id` to `index.html` so direct visits and refreshes work on Cloudflare Pages. The `public/_headers` file adds basic security headers and long-lived caching for generated Expo static assets.
+The `public/_redirects` file rewrites app routes such as `/login`, `/study`, `/friends`, `/subjects`, and `/chats/:id` to `index.html` so direct visits and refreshes work on Cloudflare Pages. The `public/_headers` file adds basic security headers and requires browser revalidation for deployed files so users do not stay pinned to stale Expo entry bundles after a successful deploy.
 
 After adding a production custom domain in Cloudflare, update Supabase auth settings:
 
